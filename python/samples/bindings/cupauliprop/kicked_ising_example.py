@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -347,7 +347,7 @@ def main():
         NAME_TO_DATA_TYPE['float64'], 0, 0, 0)
     
     # Copy observable from host to device using populateFromView
-    cupauliprop.pauli_expansion_populate_from_view(handle, h_observable_view, in_expansion)
+    cupauliprop.pauli_expansion_populate_from_view(handle, h_observable_view, in_expansion, 0)
     
     # Clean up host resources
     cupauliprop.destroy_pauli_expansion_view(h_observable_view)
@@ -510,7 +510,7 @@ def main():
             handle, in_view, out_expansion, gate,
             adjoint, make_sorted, keep_duplicates,
             num_passed_trunc_strats, truncation_strategies if num_passed_trunc_strats > 0 else None,
-            workspace)
+            workspace, 0)
         
         # Free the temporary view since it points to the old input expansion, whereas
         # we will subsequently treat the modified output expansion as the next input
@@ -559,7 +559,7 @@ def main():
     # Compute the trace; the main and final output of this simulation!
     expec = np.zeros(1, dtype=np.float64)
     cupauliprop.pauli_expansion_view_compute_trace_with_zero_state(
-        handle, out_view, expec.ctypes.data, workspace)
+        handle, out_view, expec.ctypes.data, workspace, 0)
     
     # End timing after trace is evaluated
     end_time = time.time()

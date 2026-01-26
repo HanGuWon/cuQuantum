@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -66,20 +66,35 @@ class TestCircuitToEinsumFunctionality:
             context = contextlib.nullcontext()
         with context:
             converter = CircuitToEinsum(circuit, dtype='complex64', backend="numpy", options=options)
-            assert converter.gates is not None
+            gates = converter.gates
+            gates_are_diagonal = converter._gates_are_diagonal
+            assert gates is not None
+            assert gates_are_diagonal is not None
+            assert len(gates) == len(gates_are_diagonal)
             assert converter.qubits is not None
+            
     
     @pytest.mark.parametrize("circuit", QiskitCircuitMatrix.L1()) # only qiskit circuits support decompose_gates option
     def test_decompose_gates_option(self, circuit):
         converter_1 = CircuitToEinsum(circuit, dtype='complex64', backend="numpy", options={'decompose_gates': True})
         converter_2 = CircuitToEinsum(circuit, dtype='complex64', backend="numpy", options={'decompose_gates': False})
-        assert len(converter_1.gates) >= len(converter_2.gates)
-
+        gates_1 = converter_1.gates
+        gates_2 = converter_2.gates
+        gates_are_diagonal_1 = converter_1._gates_are_diagonal
+        gates_are_diagonal_2 = converter_2._gates_are_diagonal
+        assert len(gates_1) >= len(gates_2)
+        assert len(gates_are_diagonal_1) >= len(gates_are_diagonal_2)
+        
     @pytest.mark.parametrize("circuit", CircuitMatrix.L1())
     def test_check_diagonal_option(self, circuit):
         converter_1 = CircuitToEinsum(circuit, dtype='complex64', backend="numpy", options={'check_diagonal': True})
         converter_2 = CircuitToEinsum(circuit, dtype='complex64', backend="numpy", options={'check_diagonal': False})
-        assert len(converter_1.gates) == len(converter_2.gates)
+        gates_1 = converter_1.gates
+        gates_2 = converter_2.gates
+        gates_are_diagonal_1 = converter_1._gates_are_diagonal
+        gates_are_diagonal_2 = converter_2._gates_are_diagonal
+        assert len(gates_1) == len(gates_2)
+        assert len(gates_are_diagonal_1) == len(gates_are_diagonal_2)
         operands_1 = converter_1.amplitude('0'*len(converter_1.qubits))[1]
         operands_2 = converter_2.amplitude('0'*len(converter_2.qubits))[1]
         assert len(operands_1) == len(operands_2)
@@ -170,8 +185,8 @@ class TestQiskitCorrectness(BaseCircuitToEinsumTester):
         self._test_batched_amplitudes(qiskit_circuit, option, qiskit_sv)
     
     @pytest.mark.parametrize("lightcone", (True, False))
-    def test_reduced_density_matrix(self, qiskit_circuit, option, qiskit_sv, lightcone):
-        self._test_reduced_density_matrix(qiskit_circuit, option, qiskit_sv, lightcone)
+    def test_rdm_and_probability(self, qiskit_circuit, option, qiskit_sv, lightcone):
+        self._test_rdm_and_probability(qiskit_circuit, option, qiskit_sv, lightcone)
     
     @pytest.mark.parametrize("lightcone", (True, False))
     def test_expectation(self, qiskit_circuit, option, qiskit_sv, lightcone):
@@ -210,8 +225,8 @@ class TestCirqCorrectness(BaseCircuitToEinsumTester):
         self._test_batched_amplitudes(cirq_circuit, option, cirq_sv)
     
     @pytest.mark.parametrize("lightcone", (True, False))
-    def test_reduced_density_matrix(self, cirq_circuit, option, cirq_sv, lightcone):
-        self._test_reduced_density_matrix(cirq_circuit, option, cirq_sv, lightcone)
+    def test_rdm_and_probability(self, cirq_circuit, option, cirq_sv, lightcone):
+        self._test_rdm_and_probability(cirq_circuit, option, cirq_sv, lightcone)
     
     @pytest.mark.parametrize("lightcone", (True, False))    
     def test_expectation(self, cirq_circuit, option, cirq_sv, lightcone):

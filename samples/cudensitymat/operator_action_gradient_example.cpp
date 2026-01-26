@@ -43,7 +43,6 @@ void exampleWorkflow(cudensitymatHandle_t handle)
   }
 
   // Construct a user-defined Liouvillian operator using a convenience C++ class
-  // Note that the constructed Liouvillian operator has some batched coefficients
   UserDefinedLiouvillian liouvillian(handle, spaceShape, batchSize);
   if (verbose)
     std::cout << "Constructed the Liouvillian operator\n";
@@ -155,7 +154,7 @@ void exampleWorkflow(cudensitymatHandle_t handle)
                       spaceShape.size(),
                       spaceShape.data(),
                       batchSize,
-                      dataType,  // data type must match that of the operators created above
+                      dataType,  // data type must match
                       &inputStateAdj));
 
   // Allocate GPU storage for the adjoint input quantum state

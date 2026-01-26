@@ -43,7 +43,7 @@ class TestCudensitymatContext:
         """
         assert CudensitymatContext._handle is None
         assert CudensitymatContext._workspace_desc is None
-        assert CudensitymatContext._operators == set()
+        assert CudensitymatContext._operator_ptrs == set()
         assert CudensitymatContext._contexts == {}
 
         op = generate_operator((3, 4, 5), jnp.float32)
@@ -52,19 +52,19 @@ class TestCudensitymatContext:
         # After creating the context, the attributes should be set.
         assert CudensitymatContext._handle is not None
         assert CudensitymatContext._workspace_desc is not None
-        assert CudensitymatContext._operators == {op}
+        assert CudensitymatContext._operator_ptrs == {op._ptr}
         assert CudensitymatContext._contexts[op._ptr] is not None
         ctx = CudensitymatContext._contexts[op._ptr]
 
         # Creating the context on the same operator again has no effect.
         CudensitymatContext.maybe_create_context(op, jax.devices('gpu')[0], 1, cudm.StatePurity.MIXED)
-        assert CudensitymatContext._operators == {op}
+        assert CudensitymatContext._operator_ptrs == {op._ptr}
         assert CudensitymatContext._contexts[op._ptr] is ctx
 
         # Creating the context on a different operator creates a new context.
         op_ = generate_operator((3, 4, 5), jnp.float64)
         CudensitymatContext.maybe_create_context(op_, jax.devices('gpu')[0], 1, cudm.StatePurity.MIXED)
-        assert CudensitymatContext._operators == {op, op_}
+        assert CudensitymatContext._operator_ptrs == {op._ptr, op_._ptr}
         assert CudensitymatContext._contexts[op_._ptr] is not None
 
     def test_get_context(self):
@@ -119,7 +119,6 @@ class TestOperatorActionContext:
         CudensitymatContext._maybe_create_handle_and_workspace()
 
         ctx = OperatorActionContext(op, jax.devices('gpu')[0], 1, cudm.StatePurity.MIXED)
-        assert ctx.operator == op
         assert ctx.device == jax.devices('gpu')[0] # TODO: Test with multiple GPUs.
         assert ctx.batch_size == 1
         assert ctx.state_purity == cudm.StatePurity.MIXED

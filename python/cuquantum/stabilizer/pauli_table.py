@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -14,6 +14,7 @@ PAULI_MAP = {
     (1, 1): "Y",
 }
 
+
 def _move_to_cpu_if_needed(*args):
     ret = []
     for a in args:
@@ -25,6 +26,7 @@ def _move_to_cpu_if_needed(*args):
             else:
                 raise ValueError(f"Unsupported array type: {type(a)}")
     return ret
+
 
 class PauliFrame:
     """A weight-less Pauli string.
@@ -40,7 +42,7 @@ class PauliFrame:
     """
 
     num_qubits: int
-
+    """number of qubits"""
 
     def __init__(
         self,
@@ -51,14 +53,17 @@ class PauliFrame:
     ):
         """Initialize a PauliFrame.
 
-        x_bits and z_bits can both be either a CPU array or a GPU array.
-        If `bit_packed=False`: array with `num_qubits` elements of dtype `uint8` or `bool`
-        If `bit_packed=True`: array with `ceil(num_qubits/8)` elements of dtype `uint32`
+        ``x_bits`` and ``z_bits`` can both be either a CPU array or a GPU array.
+        Both arrays must have the same shape determined by the ``bit_packed``
+        and ``num_qubits`` arguments:
+
+        - If ``bit_packed=False``, arrays have ``num_qubits`` elements
+        - If ``bit_packed=True``, arrays have ``ceil(num_qubits/8)`` elements
 
         Args:
             x_bits: X bits for each qubit.
             z_bits: Z bits for each qubit (same format as x_bits).
-            num_qubits: Number of qubits. Must be specified if `bit_packed=True`
+            num_qubits: Number of qubits. Must be specified if ``bit_packed=True``
             bit_packed: Whether the input bits are in packed format (default: `False`)
         """
 
@@ -73,14 +78,14 @@ class PauliFrame:
     def __getitem__(self, qubit_idx: int) -> str:
         """Get a Pauli operator for a specific qubit.
 
-        Returns: a one-character string, one of `'IXZY'`
+        Returns: a one-character string, one of ``'IXZY'``
         """
         return PAULI_MAP[tuple(self._xz[qubit_idx])]
 
     def to_string(self) -> str:
         """Convert to string representation.
 
-        Returns: a string of characters `'IXZY'`
+        Returns: a string of characters ``'IXZY'``
         """
         paulis = [self[i] for i in range(self.num_qubits)]
         return "".join(paulis)
@@ -96,21 +101,23 @@ class PauliTable:
     """Holds Pauli frame table data.
 
     The table can store data in one of 4 formats:
+
     - bit-packed on CPU
     - unpacked on GPU
     - bit-packed on GPU
     - unpacked on CPU
-
-    Attributes:
-        x_table: X bit table (NumPy or CuPy array)
-        z_table: Z bit table (NumPy or CuPy array)
-        bit_packed: Whether the tables are in bit-packed format (default: `False`)
-        num_qubits: Number of qubits
-        num_paulis: Number of Paulis
     """
 
     num_qubits: int
+    """number of qubits"""
     num_paulis: int
+    """number of paulis"""
+    x_table: Array
+    """X bits of Pauli frames"""
+    z_table: Array
+    """Z bits of Pauli frames"""
+    bit_packed: bool
+    """whether the X and Z bit tables are in bit-packed format"""
 
     def __init__(
         self,
@@ -125,7 +132,7 @@ class PauliTable:
         Args:
             x_table: X bit table (NumPy or CuPy array)
             z_table: Z bit table (NumPy or CuPy array)
-            num_paulis: Number of Pauli samples 
+            num_paulis: Number of Pauli samples
             num_qubits: Number of qubits
             bit_packed: Whether tables are in bit-packed format (default: `False`)
         """
@@ -150,15 +157,17 @@ class PauliTable:
         representing all Paulis in that column.
 
         Args:
-            col_idx: Pauli frame index, between 0 and `num_paulis - 1`
+            col_idx: Pauli frame index, between 0 and ``num_paulis - 1``
 
         Returns:
-            :py:class:`PauliFrame` object for that column
+            :class:`PauliFrame` object for that column
         """
         if not self.bit_packed:
             xbits = self.x_table[:, col_idx]
             zbits = self.z_table[:, col_idx]
-            return PauliFrame(xbits, zbits, num_qubits=self.num_qubits, bit_packed=False)
+            return PauliFrame(
+                xbits, zbits, num_qubits=self.num_qubits, bit_packed=False
+            )
 
         xwords = self.x_table[:, col_idx // 8]
         zwords = self.z_table[:, col_idx // 8]

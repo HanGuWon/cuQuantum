@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -52,6 +52,41 @@ class TestNetworkOperator:
         for tensors, _, _ in network_operator.mpos + network_operator.tensor_products:
             for o in tensors:
                 assert (o.name, o.device_id) == (expected_backend, expected_device)
+    
+    @pytest.mark.parametrize(
+        "remove_identity", (True, False, 'auto')
+    )
+    @pytest.mark.parametrize(
+        "pauli_strings",
+        (
+            {'IXIXY': 0.3, 'ZZXYI': 0.2, 'XZXIX': 0.1, 'YYZXZ': 0.4},
+            'IXZZI',
+            'XYZZXY',
+        )
+    )
+    def test_from_pauli_strings_remove_identity(self, remove_identity, pauli_strings):
+        num_pauli_terms = len(pauli_strings) if isinstance(pauli_strings, dict) else 1
+        if remove_identity == 'auto':
+            identity_to_be_removed = num_pauli_terms == 1
+        else:
+            identity_to_be_removed = remove_identity
+        network_operator = NetworkOperator.from_pauli_strings(pauli_strings, remove_identity=remove_identity)
+        if isinstance(pauli_strings, str):
+            pauli_strings = {pauli_strings: 1}
+        expected_terms_count = {}
+        for term in pauli_strings.keys():
+            if identity_to_be_removed:
+                num_operands = len(term) - term.count('I')
+            else:
+                num_operands = len(term)
+            expected_terms_count[num_operands] = expected_terms_count.get(num_operands, 0) + 1
+        
+        term_counts = {}
+        for t, _, _ in network_operator.tensor_products:
+            num_operands = len(t)
+            term_counts[num_operands] = term_counts.get(num_operands, 0) + 1
+        
+        assert expected_terms_count == term_counts
     
     @pytest.mark.parametrize(
         "kwargs", ({}, {'backend': 'auto'}),

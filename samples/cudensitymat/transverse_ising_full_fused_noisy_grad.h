@@ -296,7 +296,7 @@ public:
                           cudensitymatScalarGradientCallbackNone));                       // no coefficient gradient associated with this operator product
     }
 
-    // Construct the full Liouvillian operator as a sum of the operator terms
+    // Construct the full Liouvillian operator as a sum of the created operator terms
     //  Create an empty operator (super-operator)
     HANDLE_CUDM_ERROR(cudensitymatCreateOperator(handle,
                         spaceShape.size(),                // Hilbert space rank (number of modes)
@@ -324,7 +324,7 @@ public:
                         liouvillian,
                         oneBodyTerm,                      // appended operator term
                         1,                                // operator term action duality as a whole (0: acting from the left; 1: acting from the right)
-                        make_cuDoubleComplex(0.0, 1.0),   // +i constant
+                        make_cuDoubleComplex(0.0, +1.0),  // +i constant
                         cudensitymatScalarCallbackNone,   // no time-dependent coefficient associated with the operator term as a whole
                         cudensitymatScalarGradientCallbackNone)); // no coefficient gradient associated with the operator term as a whole
     //  Append an operator term to the operator (super-operator)

@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -59,6 +59,8 @@ def parse_noisy_factory_state(factory, config):
                 # Controlled-Tensor
                 # NetworkState currently only support immutable controlled tensors
                 tensor_id = state_reference.apply_tensor_operator(modes, op, control_modes=gate_info['control_modes'], control_values=gate_info['control_values'], immutable=True)
+            elif 'diagonal_gate' in gate_info:
+                tensor_id = state_reference.apply_tensor_operator(modes, op, diagonal=True, unitary=True)
             else:
                 # Unitary/General Channels
                 assert 'probabilities' in gate_info

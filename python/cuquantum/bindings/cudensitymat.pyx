@@ -1,10 +1,13 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# This code was automatically generated with version 25.09.0. Do not modify it directly.
+# This code was automatically generated with version 26.01.0. Do not modify it directly.
 
 cimport cython
+cimport cpython
+cimport cpython.buffer
+cimport cpython.memoryview
 from libc.stdlib cimport malloc, free
 from libcpp.vector cimport vector
 
@@ -19,6 +22,13 @@ from ._utils cimport get_resource_ptr, get_resource_ptrs, nullable_unique_ptr
 import numpy as _numpy
 
 include "cudensitymat.pxi"
+
+
+###############################################################################
+# POD
+###############################################################################
+
+
 
 
 ###############################################################################
@@ -59,6 +69,7 @@ class DistributedProvider(_IntEnum):
     """See `cudensitymatDistributedProvider_t`."""
     NONE = CUDENSITYMAT_DISTRIBUTED_PROVIDER_NONE
     MPI = CUDENSITYMAT_DISTRIBUTED_PROVIDER_MPI
+    NCCL = CUDENSITYMAT_DISTRIBUTED_PROVIDER_NCCL
 
 class CallbackDevice(_IntEnum):
     """See `cudensitymatCallbackDevice_t`."""
@@ -145,8 +156,8 @@ cpdef get_version():
     .. seealso:: `cudensitymatGetVersion`
     """
     with nogil:
-        status = cudensitymatGetVersion()
-    check_status(status)
+        __status__ = cudensitymatGetVersion()
+    check_status(__status__)
 
 
 cpdef intptr_t create() except? 0:
@@ -159,8 +170,8 @@ cpdef intptr_t create() except? 0:
     """
     cdef Handle handle
     with nogil:
-        status = cudensitymatCreate(&handle)
-    check_status(status)
+        __status__ = cudensitymatCreate(&handle)
+    check_status(__status__)
     return <intptr_t>handle
 
 
@@ -173,8 +184,8 @@ cpdef destroy(intptr_t handle):
     .. seealso:: `cudensitymatDestroy`
     """
     with nogil:
-        status = cudensitymatDestroy(<Handle>handle)
-    check_status(status)
+        __status__ = cudensitymatDestroy(<Handle>handle)
+    check_status(__status__)
 
 
 cpdef reset_distributed_configuration(intptr_t handle, int provider, intptr_t comm_ptr, size_t comm_size):
@@ -189,8 +200,8 @@ cpdef reset_distributed_configuration(intptr_t handle, int provider, intptr_t co
     .. seealso:: `cudensitymatResetDistributedConfiguration`
     """
     with nogil:
-        status = cudensitymatResetDistributedConfiguration(<Handle>handle, <_DistributedProvider>provider, <const void*>comm_ptr, comm_size)
-    check_status(status)
+        __status__ = cudensitymatResetDistributedConfiguration(<Handle>handle, <_DistributedProvider>provider, <const void*>comm_ptr, comm_size)
+    check_status(__status__)
 
 
 cpdef int32_t get_num_ranks(intptr_t handle) except? -1:
@@ -206,8 +217,8 @@ cpdef int32_t get_num_ranks(intptr_t handle) except? -1:
     """
     cdef int32_t num_ranks
     with nogil:
-        status = cudensitymatGetNumRanks(<const Handle>handle, &num_ranks)
-    check_status(status)
+        __status__ = cudensitymatGetNumRanks(<const Handle>handle, &num_ranks)
+    check_status(__status__)
     return num_ranks
 
 
@@ -224,8 +235,8 @@ cpdef int32_t get_proc_rank(intptr_t handle) except? -1:
     """
     cdef int32_t proc_rank
     with nogil:
-        status = cudensitymatGetProcRank(<const Handle>handle, &proc_rank)
-    check_status(status)
+        __status__ = cudensitymatGetProcRank(<const Handle>handle, &proc_rank)
+    check_status(__status__)
     return proc_rank
 
 
@@ -239,8 +250,8 @@ cpdef reset_random_seed(intptr_t handle, int32_t random_seed):
     .. seealso:: `cudensitymatResetRandomSeed`
     """
     with nogil:
-        status = cudensitymatResetRandomSeed(<Handle>handle, random_seed)
-    check_status(status)
+        __status__ = cudensitymatResetRandomSeed(<Handle>handle, random_seed)
+    check_status(__status__)
 
 
 cpdef intptr_t create_state(intptr_t handle, int purity, int32_t num_space_modes, space_mode_extents, int64_t batch_size, int data_type) except? 0:
@@ -267,8 +278,8 @@ cpdef intptr_t create_state(intptr_t handle, int purity, int32_t num_space_modes
     get_resource_ptr[int64_t](_space_mode_extents_, space_mode_extents, <int64_t*>NULL)
     cdef State state
     with nogil:
-        status = cudensitymatCreateState(<const Handle>handle, <_StatePurity>purity, num_space_modes, <const int64_t*>(_space_mode_extents_.data()), batch_size, <DataType>data_type, &state)
-    check_status(status)
+        __status__ = cudensitymatCreateState(<const Handle>handle, <_StatePurity>purity, num_space_modes, <const int64_t*>(_space_mode_extents_.data()), batch_size, <DataType>data_type, &state)
+    check_status(__status__)
     return <intptr_t>state
 
 
@@ -281,8 +292,8 @@ cpdef destroy_state(intptr_t state):
     .. seealso:: `cudensitymatDestroyState`
     """
     with nogil:
-        status = cudensitymatDestroyState(<State>state)
-    check_status(status)
+        __status__ = cudensitymatDestroyState(<State>state)
+    check_status(__status__)
 
 
 cpdef int32_t state_get_num_components(intptr_t handle, intptr_t state) except? -1:
@@ -299,8 +310,8 @@ cpdef int32_t state_get_num_components(intptr_t handle, intptr_t state) except? 
     """
     cdef int32_t num_state_components
     with nogil:
-        status = cudensitymatStateGetNumComponents(<const Handle>handle, <const State>state, &num_state_components)
-    check_status(status)
+        __status__ = cudensitymatStateGetNumComponents(<const Handle>handle, <const State>state, &num_state_components)
+    check_status(__status__)
     return num_state_components
 
 
@@ -329,8 +340,8 @@ cpdef state_attach_component_storage(intptr_t handle, intptr_t state, int32_t nu
     cdef nullable_unique_ptr[ vector[size_t] ] _component_buffer_size_
     get_resource_ptr[size_t](_component_buffer_size_, component_buffer_size, <size_t*>NULL)
     with nogil:
-        status = cudensitymatStateAttachComponentStorage(<const Handle>handle, <State>state, num_state_components, <void**>(_component_buffer_.data()), <const size_t*>(_component_buffer_size_.data()))
-    check_status(status)
+        __status__ = cudensitymatStateAttachComponentStorage(<const Handle>handle, <State>state, num_state_components, <void**>(_component_buffer_.data()), <const size_t*>(_component_buffer_size_.data()))
+    check_status(__status__)
 
 
 cpdef state_get_component_num_modes(intptr_t handle, intptr_t state, int32_t state_component_local_id, intptr_t state_component_global_id, intptr_t state_component_num_modes, intptr_t batch_mode_location):
@@ -347,8 +358,8 @@ cpdef state_get_component_num_modes(intptr_t handle, intptr_t state, int32_t sta
     .. seealso:: `cudensitymatStateGetComponentNumModes`
     """
     with nogil:
-        status = cudensitymatStateGetComponentNumModes(<const Handle>handle, <State>state, state_component_local_id, <int32_t*>state_component_global_id, <int32_t*>state_component_num_modes, <int32_t*>batch_mode_location)
-    check_status(status)
+        __status__ = cudensitymatStateGetComponentNumModes(<const Handle>handle, <State>state, state_component_local_id, <int32_t*>state_component_global_id, <int32_t*>state_component_num_modes, <int32_t*>batch_mode_location)
+    check_status(__status__)
 
 
 cpdef state_get_component_info(intptr_t handle, intptr_t state, int32_t state_component_local_id, intptr_t state_component_global_id, intptr_t state_component_num_modes, intptr_t state_component_mode_extents, intptr_t state_component_mode_offsets):
@@ -366,8 +377,8 @@ cpdef state_get_component_info(intptr_t handle, intptr_t state, int32_t state_co
     .. seealso:: `cudensitymatStateGetComponentInfo`
     """
     with nogil:
-        status = cudensitymatStateGetComponentInfo(<const Handle>handle, <State>state, state_component_local_id, <int32_t*>state_component_global_id, <int32_t*>state_component_num_modes, <int64_t*>state_component_mode_extents, <int64_t*>state_component_mode_offsets)
-    check_status(status)
+        __status__ = cudensitymatStateGetComponentInfo(<const Handle>handle, <State>state, state_component_local_id, <int32_t*>state_component_global_id, <int32_t*>state_component_num_modes, <int64_t*>state_component_mode_extents, <int64_t*>state_component_mode_offsets)
+    check_status(__status__)
 
 
 cpdef state_initialize_zero(intptr_t handle, intptr_t state, intptr_t stream):
@@ -381,8 +392,8 @@ cpdef state_initialize_zero(intptr_t handle, intptr_t state, intptr_t stream):
     .. seealso:: `cudensitymatStateInitializeZero`
     """
     with nogil:
-        status = cudensitymatStateInitializeZero(<const Handle>handle, <State>state, <Stream>stream)
-    check_status(status)
+        __status__ = cudensitymatStateInitializeZero(<const Handle>handle, <State>state, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef state_compute_scaling(intptr_t handle, intptr_t state, intptr_t scaling_factors, intptr_t stream):
@@ -397,8 +408,8 @@ cpdef state_compute_scaling(intptr_t handle, intptr_t state, intptr_t scaling_fa
     .. seealso:: `cudensitymatStateComputeScaling`
     """
     with nogil:
-        status = cudensitymatStateComputeScaling(<const Handle>handle, <State>state, <const void*>scaling_factors, <Stream>stream)
-    check_status(status)
+        __status__ = cudensitymatStateComputeScaling(<const Handle>handle, <State>state, <const void*>scaling_factors, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef state_compute_norm(intptr_t handle, intptr_t state, intptr_t norm, intptr_t stream):
@@ -413,8 +424,8 @@ cpdef state_compute_norm(intptr_t handle, intptr_t state, intptr_t norm, intptr_
     .. seealso:: `cudensitymatStateComputeNorm`
     """
     with nogil:
-        status = cudensitymatStateComputeNorm(<const Handle>handle, <const State>state, <void*>norm, <Stream>stream)
-    check_status(status)
+        __status__ = cudensitymatStateComputeNorm(<const Handle>handle, <const State>state, <void*>norm, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef state_compute_trace(intptr_t handle, intptr_t state, intptr_t trace, intptr_t stream):
@@ -429,8 +440,8 @@ cpdef state_compute_trace(intptr_t handle, intptr_t state, intptr_t trace, intpt
     .. seealso:: `cudensitymatStateComputeTrace`
     """
     with nogil:
-        status = cudensitymatStateComputeTrace(<const Handle>handle, <const State>state, <void*>trace, <Stream>stream)
-    check_status(status)
+        __status__ = cudensitymatStateComputeTrace(<const Handle>handle, <const State>state, <void*>trace, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef state_compute_accumulation(intptr_t handle, intptr_t state_in, intptr_t state_out, intptr_t scaling_factors, intptr_t stream):
@@ -446,8 +457,8 @@ cpdef state_compute_accumulation(intptr_t handle, intptr_t state_in, intptr_t st
     .. seealso:: `cudensitymatStateComputeAccumulation`
     """
     with nogil:
-        status = cudensitymatStateComputeAccumulation(<const Handle>handle, <const State>state_in, <State>state_out, <const void*>scaling_factors, <Stream>stream)
-    check_status(status)
+        __status__ = cudensitymatStateComputeAccumulation(<const Handle>handle, <const State>state_in, <State>state_out, <const void*>scaling_factors, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef state_compute_inner_product(intptr_t handle, intptr_t state_left, intptr_t state_right, intptr_t inner_product, intptr_t stream):
@@ -463,8 +474,8 @@ cpdef state_compute_inner_product(intptr_t handle, intptr_t state_left, intptr_t
     .. seealso:: `cudensitymatStateComputeInnerProduct`
     """
     with nogil:
-        status = cudensitymatStateComputeInnerProduct(<const Handle>handle, <const State>state_left, <const State>state_right, <void*>inner_product, <Stream>stream)
-    check_status(status)
+        __status__ = cudensitymatStateComputeInnerProduct(<const Handle>handle, <const State>state_left, <const State>state_right, <void*>inner_product, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef intptr_t create_elementary_operator(intptr_t handle, int32_t num_space_modes, space_mode_extents, int sparsity, int32_t num_diagonals, diagonal_offsets, int data_type, intptr_t tensor_data, tensor_callback, tensor_gradient_callback) except? 0:
@@ -503,8 +514,8 @@ cpdef intptr_t create_elementary_operator(intptr_t handle, int32_t num_space_mod
     cdef _WrappedTensorGradientCallback _tensor_gradient_callback_ = _convert_tensor_gradient_callback(tensor_gradient_callback)
     cdef ElementaryOperator elem_operator
     with nogil:
-        status = cudensitymatCreateElementaryOperator(<const Handle>handle, num_space_modes, <const int64_t*>(_space_mode_extents_.data()), <_ElementaryOperatorSparsity>sparsity, num_diagonals, <const int32_t*>(_diagonal_offsets_.data()), <DataType>data_type, <void*>tensor_data, _tensor_callback_, _tensor_gradient_callback_, &elem_operator)
-    check_status(status)
+        __status__ = cudensitymatCreateElementaryOperator(<const Handle>handle, num_space_modes, <const int64_t*>(_space_mode_extents_.data()), <_ElementaryOperatorSparsity>sparsity, num_diagonals, <const int32_t*>(_diagonal_offsets_.data()), <DataType>data_type, <void*>tensor_data, _tensor_callback_, _tensor_gradient_callback_, &elem_operator)
+    check_status(__status__)
     _hold_tensor_callback_reference(<intptr_t>elem_operator, tensor_callback)
     return <intptr_t>elem_operator
 
@@ -546,8 +557,8 @@ cpdef intptr_t create_elementary_operator_batch(intptr_t handle, int32_t num_spa
     cdef _WrappedTensorGradientCallback _tensor_gradient_callback_ = _convert_tensor_gradient_callback(tensor_gradient_callback)
     cdef ElementaryOperator elem_operator
     with nogil:
-        status = cudensitymatCreateElementaryOperatorBatch(<const Handle>handle, num_space_modes, <const int64_t*>(_space_mode_extents_.data()), batch_size, <_ElementaryOperatorSparsity>sparsity, num_diagonals, <const int32_t*>(_diagonal_offsets_.data()), <DataType>data_type, <void*>tensor_data, _tensor_callback_, _tensor_gradient_callback_, &elem_operator)
-    check_status(status)
+        __status__ = cudensitymatCreateElementaryOperatorBatch(<const Handle>handle, num_space_modes, <const int64_t*>(_space_mode_extents_.data()), batch_size, <_ElementaryOperatorSparsity>sparsity, num_diagonals, <const int32_t*>(_diagonal_offsets_.data()), <DataType>data_type, <void*>tensor_data, _tensor_callback_, _tensor_gradient_callback_, &elem_operator)
+    check_status(__status__)
     _hold_tensor_callback_reference(<intptr_t>elem_operator, tensor_callback)
     return <intptr_t>elem_operator
 
@@ -561,8 +572,8 @@ cpdef destroy_elementary_operator(intptr_t elem_operator):
     .. seealso:: `cudensitymatDestroyElementaryOperator`
     """
     with nogil:
-        status = cudensitymatDestroyElementaryOperator(<ElementaryOperator>elem_operator)
-    check_status(status)
+        __status__ = cudensitymatDestroyElementaryOperator(<ElementaryOperator>elem_operator)
+    check_status(__status__)
     _callback_holders.pop(elem_operator, None)
 
 
@@ -593,8 +604,8 @@ cpdef intptr_t create_matrix_operator_dense_local(intptr_t handle, int32_t num_s
     cdef _WrappedTensorGradientCallback _matrix_gradient_callback_ = _convert_tensor_gradient_callback(matrix_gradient_callback)
     cdef MatrixOperator matrix_operator
     with nogil:
-        status = cudensitymatCreateMatrixOperatorDenseLocal(<const Handle>handle, num_space_modes, <const int64_t*>(_space_mode_extents_.data()), <DataType>data_type, <void*>matrix_data, _matrix_callback_, _matrix_gradient_callback_, &matrix_operator)
-    check_status(status)
+        __status__ = cudensitymatCreateMatrixOperatorDenseLocal(<const Handle>handle, num_space_modes, <const int64_t*>(_space_mode_extents_.data()), <DataType>data_type, <void*>matrix_data, _matrix_callback_, _matrix_gradient_callback_, &matrix_operator)
+    check_status(__status__)
     _hold_tensor_callback_reference(<intptr_t>matrix_operator, matrix_callback)
     return <intptr_t>matrix_operator
 
@@ -627,8 +638,8 @@ cpdef intptr_t create_matrix_operator_dense_local_batch(intptr_t handle, int32_t
     cdef _WrappedTensorGradientCallback _matrix_gradient_callback_ = _convert_tensor_gradient_callback(matrix_gradient_callback)
     cdef MatrixOperator matrix_operator
     with nogil:
-        status = cudensitymatCreateMatrixOperatorDenseLocalBatch(<const Handle>handle, num_space_modes, <const int64_t*>(_space_mode_extents_.data()), batch_size, <DataType>data_type, <void*>matrix_data, _matrix_callback_, _matrix_gradient_callback_, &matrix_operator)
-    check_status(status)
+        __status__ = cudensitymatCreateMatrixOperatorDenseLocalBatch(<const Handle>handle, num_space_modes, <const int64_t*>(_space_mode_extents_.data()), batch_size, <DataType>data_type, <void*>matrix_data, _matrix_callback_, _matrix_gradient_callback_, &matrix_operator)
+    check_status(__status__)
     _hold_tensor_callback_reference(<intptr_t>matrix_operator, matrix_callback)
     return <intptr_t>matrix_operator
 
@@ -642,8 +653,8 @@ cpdef destroy_matrix_operator(intptr_t matrix_operator):
     .. seealso:: `cudensitymatDestroyMatrixOperator`
     """
     with nogil:
-        status = cudensitymatDestroyMatrixOperator(<MatrixOperator>matrix_operator)
-    check_status(status)
+        __status__ = cudensitymatDestroyMatrixOperator(<MatrixOperator>matrix_operator)
+    check_status(__status__)
     _callback_holders.pop(matrix_operator, None)
 
 
@@ -668,8 +679,8 @@ cpdef intptr_t create_operator_term(intptr_t handle, int32_t num_space_modes, sp
     get_resource_ptr[int64_t](_space_mode_extents_, space_mode_extents, <int64_t*>NULL)
     cdef OperatorTerm operator_term
     with nogil:
-        status = cudensitymatCreateOperatorTerm(<const Handle>handle, num_space_modes, <const int64_t*>(_space_mode_extents_.data()), &operator_term)
-    check_status(status)
+        __status__ = cudensitymatCreateOperatorTerm(<const Handle>handle, num_space_modes, <const int64_t*>(_space_mode_extents_.data()), &operator_term)
+    check_status(__status__)
     return <intptr_t>operator_term
 
 
@@ -682,8 +693,8 @@ cpdef destroy_operator_term(intptr_t operator_term):
     .. seealso:: `cudensitymatDestroyOperatorTerm`
     """
     with nogil:
-        status = cudensitymatDestroyOperatorTerm(<OperatorTerm>operator_term)
-    check_status(status)
+        __status__ = cudensitymatDestroyOperatorTerm(<OperatorTerm>operator_term)
+    check_status(__status__)
     _callback_holders.pop(operator_term, None)
 
 
@@ -725,8 +736,8 @@ cpdef operator_term_append_elementary_product(intptr_t handle, intptr_t operator
     cdef _WrappedScalarCallback _coefficient_callback_ = _convert_scalar_callback(coefficient_callback)
     cdef _WrappedScalarGradientCallback _coefficient_gradient_callback_ = _convert_scalar_gradient_callback(coefficient_gradient_callback)
     with nogil:
-        status = cudensitymatOperatorTermAppendElementaryProduct(<const Handle>handle, <OperatorTerm>operator_term, num_elem_operators, <const ElementaryOperator*>(_elem_operators_.data()), <const int32_t*>(_state_modes_acted_on_.data()), <const int32_t*>(_mode_action_duality_.data()), <cuDoubleComplex>_coefficient_, _coefficient_callback_, _coefficient_gradient_callback_)
-    check_status(status)
+        __status__ = cudensitymatOperatorTermAppendElementaryProduct(<const Handle>handle, <OperatorTerm>operator_term, num_elem_operators, <const ElementaryOperator*>(_elem_operators_.data()), <const int32_t*>(_state_modes_acted_on_.data()), <const int32_t*>(_mode_action_duality_.data()), <cuDoubleComplex>_coefficient_, _coefficient_callback_, _coefficient_gradient_callback_)
+    check_status(__status__)
     _hold_scalar_callback_reference(<intptr_t>operator_term, coefficient_callback)
 
 
@@ -769,8 +780,8 @@ cpdef operator_term_append_elementary_product_batch(intptr_t handle, intptr_t op
     cdef _WrappedScalarCallback _coefficient_callback_ = _convert_scalar_callback(coefficient_callback)
     cdef _WrappedScalarGradientCallback _coefficient_gradient_callback_ = _convert_scalar_gradient_callback(coefficient_gradient_callback)
     with nogil:
-        status = cudensitymatOperatorTermAppendElementaryProductBatch(<const Handle>handle, <OperatorTerm>operator_term, num_elem_operators, <const ElementaryOperator*>(_elem_operators_.data()), <const int32_t*>(_state_modes_acted_on_.data()), <const int32_t*>(_mode_action_duality_.data()), batch_size, <const cuDoubleComplex*>static_coefficients, <cuDoubleComplex*>total_coefficients, _coefficient_callback_, _coefficient_gradient_callback_)
-    check_status(status)
+        __status__ = cudensitymatOperatorTermAppendElementaryProductBatch(<const Handle>handle, <OperatorTerm>operator_term, num_elem_operators, <const ElementaryOperator*>(_elem_operators_.data()), <const int32_t*>(_state_modes_acted_on_.data()), <const int32_t*>(_mode_action_duality_.data()), batch_size, <const cuDoubleComplex*>static_coefficients, <cuDoubleComplex*>total_coefficients, _coefficient_callback_, _coefficient_gradient_callback_)
+    check_status(__status__)
     _hold_scalar_callback_reference(<intptr_t>operator_term, coefficient_callback)
 
 
@@ -812,8 +823,8 @@ cpdef operator_term_append_matrix_product(intptr_t handle, intptr_t operator_ter
     cdef _WrappedScalarCallback _coefficient_callback_ = _convert_scalar_callback(coefficient_callback)
     cdef _WrappedScalarGradientCallback _coefficient_gradient_callback_ = _convert_scalar_gradient_callback(coefficient_gradient_callback)
     with nogil:
-        status = cudensitymatOperatorTermAppendMatrixProduct(<const Handle>handle, <OperatorTerm>operator_term, num_matrix_operators, <const MatrixOperator*>(_matrix_operators_.data()), <const int32_t*>(_matrix_conjugation_.data()), <const int32_t*>(_action_duality_.data()), <cuDoubleComplex>_coefficient_, _coefficient_callback_, _coefficient_gradient_callback_)
-    check_status(status)
+        __status__ = cudensitymatOperatorTermAppendMatrixProduct(<const Handle>handle, <OperatorTerm>operator_term, num_matrix_operators, <const MatrixOperator*>(_matrix_operators_.data()), <const int32_t*>(_matrix_conjugation_.data()), <const int32_t*>(_action_duality_.data()), <cuDoubleComplex>_coefficient_, _coefficient_callback_, _coefficient_gradient_callback_)
+    check_status(__status__)
     _hold_scalar_callback_reference(<intptr_t>operator_term, coefficient_callback)
 
 
@@ -856,8 +867,8 @@ cpdef operator_term_append_matrix_product_batch(intptr_t handle, intptr_t operat
     cdef _WrappedScalarCallback _coefficient_callback_ = _convert_scalar_callback(coefficient_callback)
     cdef _WrappedScalarGradientCallback _coefficient_gradient_callback_ = _convert_scalar_gradient_callback(coefficient_gradient_callback)
     with nogil:
-        status = cudensitymatOperatorTermAppendMatrixProductBatch(<const Handle>handle, <OperatorTerm>operator_term, num_matrix_operators, <const MatrixOperator*>(_matrix_operators_.data()), <const int32_t*>(_matrix_conjugation_.data()), <const int32_t*>(_action_duality_.data()), batch_size, <const cuDoubleComplex*>static_coefficients, <cuDoubleComplex*>total_coefficients, _coefficient_callback_, _coefficient_gradient_callback_)
-    check_status(status)
+        __status__ = cudensitymatOperatorTermAppendMatrixProductBatch(<const Handle>handle, <OperatorTerm>operator_term, num_matrix_operators, <const MatrixOperator*>(_matrix_operators_.data()), <const int32_t*>(_matrix_conjugation_.data()), <const int32_t*>(_action_duality_.data()), batch_size, <const cuDoubleComplex*>static_coefficients, <cuDoubleComplex*>total_coefficients, _coefficient_callback_, _coefficient_gradient_callback_)
+    check_status(__status__)
     _hold_scalar_callback_reference(<intptr_t>operator_term, coefficient_callback)
 
 
@@ -882,8 +893,8 @@ cpdef intptr_t create_operator(intptr_t handle, int32_t num_space_modes, space_m
     get_resource_ptr[int64_t](_space_mode_extents_, space_mode_extents, <int64_t*>NULL)
     cdef Operator superoperator
     with nogil:
-        status = cudensitymatCreateOperator(<const Handle>handle, num_space_modes, <const int64_t*>(_space_mode_extents_.data()), &superoperator)
-    check_status(status)
+        __status__ = cudensitymatCreateOperator(<const Handle>handle, num_space_modes, <const int64_t*>(_space_mode_extents_.data()), &superoperator)
+    check_status(__status__)
     return <intptr_t>superoperator
 
 
@@ -896,8 +907,8 @@ cpdef destroy_operator(intptr_t superoperator):
     .. seealso:: `cudensitymatDestroyOperator`
     """
     with nogil:
-        status = cudensitymatDestroyOperator(<Operator>superoperator)
-    check_status(status)
+        __status__ = cudensitymatDestroyOperator(<Operator>superoperator)
+    check_status(__status__)
     _callback_holders.pop(superoperator, None)
 
 
@@ -919,8 +930,8 @@ cpdef operator_append_term(intptr_t handle, intptr_t superoperator, intptr_t ope
     cdef _WrappedScalarCallback _coefficient_callback_ = _convert_scalar_callback(coefficient_callback)
     cdef _WrappedScalarGradientCallback _coefficient_gradient_callback_ = _convert_scalar_gradient_callback(coefficient_gradient_callback)
     with nogil:
-        status = cudensitymatOperatorAppendTerm(<const Handle>handle, <Operator>superoperator, <OperatorTerm>operator_term, duality, <cuDoubleComplex>_coefficient_, _coefficient_callback_, _coefficient_gradient_callback_)
-    check_status(status)
+        __status__ = cudensitymatOperatorAppendTerm(<const Handle>handle, <Operator>superoperator, <OperatorTerm>operator_term, duality, <cuDoubleComplex>_coefficient_, _coefficient_callback_, _coefficient_gradient_callback_)
+    check_status(__status__)
     _hold_scalar_callback_reference(<intptr_t>superoperator, coefficient_callback)
 
 
@@ -943,9 +954,53 @@ cpdef operator_append_term_batch(intptr_t handle, intptr_t superoperator, intptr
     cdef _WrappedScalarCallback _coefficient_callback_ = _convert_scalar_callback(coefficient_callback)
     cdef _WrappedScalarGradientCallback _coefficient_gradient_callback_ = _convert_scalar_gradient_callback(coefficient_gradient_callback)
     with nogil:
-        status = cudensitymatOperatorAppendTermBatch(<const Handle>handle, <Operator>superoperator, <OperatorTerm>operator_term, duality, batch_size, <const cuDoubleComplex*>static_coefficients, <cuDoubleComplex*>total_coefficients, _coefficient_callback_, _coefficient_gradient_callback_)
-    check_status(status)
+        __status__ = cudensitymatOperatorAppendTermBatch(<const Handle>handle, <Operator>superoperator, <OperatorTerm>operator_term, duality, batch_size, <const cuDoubleComplex*>static_coefficients, <cuDoubleComplex*>total_coefficients, _coefficient_callback_, _coefficient_gradient_callback_)
+    check_status(__status__)
     _hold_scalar_callback_reference(<intptr_t>superoperator, coefficient_callback)
+
+
+cpdef attach_batched_coefficients(intptr_t handle, intptr_t superoperator, int32_t num_operator_term_batched_coeffs, operator_term_batched_coeffs_tmp, operator_term_batched_coeffs, int32_t num_operator_product_batched_coeffs, operator_product_batched_coeffs_tmp, operator_product_batched_coeffs):
+    """Attaches batched coefficients to the operator's term and product coefficients.
+
+    Args:
+        handle (intptr_t): Library handle.
+        superoperator (intptr_t): Operator.
+        num_operator_term_batched_coeffs (int32_t): Number of batched coefficients in the operator term.
+        operator_term_batched_coeffs_tmp (object): Temporary buffer for the batched coefficients in the operator term. It can be:
+
+            - an :class:`int` as the pointer address to the array, or
+            - a Python sequence of :class:`int`\s (as pointer addresses).
+
+        operator_term_batched_coeffs (object): Actual buffer for the batched coefficients in the operator term. It can be:
+
+            - an :class:`int` as the pointer address to the array, or
+            - a Python sequence of :class:`int`\s (as pointer addresses).
+
+        num_operator_product_batched_coeffs (int32_t): Number of batched coefficients in the operator product.
+        operator_product_batched_coeffs_tmp (object): Temporary buffer for the batched coefficients in the operator product. It can be:
+
+            - an :class:`int` as the pointer address to the array, or
+            - a Python sequence of :class:`int`\s (as pointer addresses).
+
+        operator_product_batched_coeffs (object): Actual buffer for the batched coefficients in the operator product. It can be:
+
+            - an :class:`int` as the pointer address to the array, or
+            - a Python sequence of :class:`int`\s (as pointer addresses).
+
+
+    .. seealso:: `cudensitymatAttachBatchedCoefficients`
+    """
+    cdef nullable_unique_ptr[ vector[void*] ] _operator_term_batched_coeffs_tmp_
+    get_resource_ptrs[void](_operator_term_batched_coeffs_tmp_, operator_term_batched_coeffs_tmp, <void*>NULL)
+    cdef nullable_unique_ptr[ vector[void*] ] _operator_term_batched_coeffs_
+    get_resource_ptrs[void](_operator_term_batched_coeffs_, operator_term_batched_coeffs, <void*>NULL)
+    cdef nullable_unique_ptr[ vector[void*] ] _operator_product_batched_coeffs_tmp_
+    get_resource_ptrs[void](_operator_product_batched_coeffs_tmp_, operator_product_batched_coeffs_tmp, <void*>NULL)
+    cdef nullable_unique_ptr[ vector[void*] ] _operator_product_batched_coeffs_
+    get_resource_ptrs[void](_operator_product_batched_coeffs_, operator_product_batched_coeffs, <void*>NULL)
+    with nogil:
+        __status__ = cudensitymatAttachBatchedCoefficients(<const Handle>handle, <Operator>superoperator, num_operator_term_batched_coeffs, <void**>(_operator_term_batched_coeffs_tmp_.data()), <void**>(_operator_term_batched_coeffs_.data()), num_operator_product_batched_coeffs, <void**>(_operator_product_batched_coeffs_tmp_.data()), <void**>(_operator_product_batched_coeffs_.data()))
+    check_status(__status__)
 
 
 cpdef operator_prepare_action(intptr_t handle, intptr_t superoperator, intptr_t state_in, intptr_t state_out, int compute_type, size_t workspace_size_limit, intptr_t workspace, intptr_t stream):
@@ -964,8 +1019,8 @@ cpdef operator_prepare_action(intptr_t handle, intptr_t superoperator, intptr_t 
     .. seealso:: `cudensitymatOperatorPrepareAction`
     """
     with nogil:
-        status = cudensitymatOperatorPrepareAction(<const Handle>handle, <Operator>superoperator, <const State>state_in, <const State>state_out, <_ComputeType>compute_type, workspace_size_limit, <WorkspaceDescriptor>workspace, <Stream>stream)
-    check_status(status)
+        __status__ = cudensitymatOperatorPrepareAction(<const Handle>handle, <Operator>superoperator, <const State>state_in, <const State>state_out, <_ComputeType>compute_type, workspace_size_limit, <WorkspaceDescriptor>workspace, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef operator_compute_action(intptr_t handle, intptr_t superoperator, double time, int64_t batch_size, int32_t num_params, intptr_t params, intptr_t state_in, intptr_t state_out, intptr_t workspace, intptr_t stream):
@@ -986,8 +1041,8 @@ cpdef operator_compute_action(intptr_t handle, intptr_t superoperator, double ti
     .. seealso:: `cudensitymatOperatorComputeAction`
     """
     with nogil:
-        status = cudensitymatOperatorComputeAction(<const Handle>handle, <Operator>superoperator, time, batch_size, num_params, <const double*>params, <const State>state_in, <State>state_out, <WorkspaceDescriptor>workspace, <Stream>stream)
-    check_status(status)
+        __status__ = cudensitymatOperatorComputeAction(<const Handle>handle, <Operator>superoperator, time, batch_size, num_params, <const double*>params, <const State>state_in, <State>state_out, <WorkspaceDescriptor>workspace, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef operator_prepare_action_backward_diff(intptr_t handle, intptr_t superoperator, intptr_t state_in, intptr_t state_out_adj, int compute_type, size_t workspace_size_limit, intptr_t workspace, intptr_t stream):
@@ -1006,8 +1061,8 @@ cpdef operator_prepare_action_backward_diff(intptr_t handle, intptr_t superopera
     .. seealso:: `cudensitymatOperatorPrepareActionBackwardDiff`
     """
     with nogil:
-        status = cudensitymatOperatorPrepareActionBackwardDiff(<const Handle>handle, <Operator>superoperator, <const State>state_in, <const State>state_out_adj, <_ComputeType>compute_type, workspace_size_limit, <WorkspaceDescriptor>workspace, <Stream>stream)
-    check_status(status)
+        __status__ = cudensitymatOperatorPrepareActionBackwardDiff(<const Handle>handle, <Operator>superoperator, <const State>state_in, <const State>state_out_adj, <_ComputeType>compute_type, workspace_size_limit, <WorkspaceDescriptor>workspace, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef operator_compute_action_backward_diff(intptr_t handle, intptr_t superoperator, double time, int64_t batch_size, int32_t num_params, intptr_t params, intptr_t state_in, intptr_t state_out_adj, intptr_t state_in_adj, intptr_t params_grad, intptr_t workspace, intptr_t stream):
@@ -1030,8 +1085,8 @@ cpdef operator_compute_action_backward_diff(intptr_t handle, intptr_t superopera
     .. seealso:: `cudensitymatOperatorComputeActionBackwardDiff`
     """
     with nogil:
-        status = cudensitymatOperatorComputeActionBackwardDiff(<const Handle>handle, <Operator>superoperator, time, batch_size, num_params, <const double*>params, <const State>state_in, <const State>state_out_adj, <State>state_in_adj, <double*>params_grad, <WorkspaceDescriptor>workspace, <Stream>stream)
-    check_status(status)
+        __status__ = cudensitymatOperatorComputeActionBackwardDiff(<const Handle>handle, <Operator>superoperator, time, batch_size, num_params, <const double*>params, <const State>state_in, <const State>state_out_adj, <State>state_in_adj, <double*>params_grad, <WorkspaceDescriptor>workspace, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef intptr_t create_operator_action(intptr_t handle, int32_t num_operators, operators) except? 0:
@@ -1055,8 +1110,8 @@ cpdef intptr_t create_operator_action(intptr_t handle, int32_t num_operators, op
     get_resource_ptrs[Operator](_operators_, operators, <Operator*>NULL)
     cdef OperatorAction operator_action
     with nogil:
-        status = cudensitymatCreateOperatorAction(<const Handle>handle, num_operators, <Operator*>(_operators_.data()), &operator_action)
-    check_status(status)
+        __status__ = cudensitymatCreateOperatorAction(<const Handle>handle, num_operators, <Operator*>(_operators_.data()), &operator_action)
+    check_status(__status__)
     return <intptr_t>operator_action
 
 
@@ -1069,8 +1124,8 @@ cpdef destroy_operator_action(intptr_t operator_action):
     .. seealso:: `cudensitymatDestroyOperatorAction`
     """
     with nogil:
-        status = cudensitymatDestroyOperatorAction(<OperatorAction>operator_action)
-    check_status(status)
+        __status__ = cudensitymatDestroyOperatorAction(<OperatorAction>operator_action)
+    check_status(__status__)
 
 
 cpdef operator_action_prepare(intptr_t handle, intptr_t operator_action, state_in, intptr_t state_out, int compute_type, size_t workspace_size_limit, intptr_t workspace, intptr_t stream):
@@ -1095,8 +1150,8 @@ cpdef operator_action_prepare(intptr_t handle, intptr_t operator_action, state_i
     cdef nullable_unique_ptr[ vector[State*] ] _state_in_
     get_resource_ptrs[State](_state_in_, state_in, <State*>NULL)
     with nogil:
-        status = cudensitymatOperatorActionPrepare(<const Handle>handle, <OperatorAction>operator_action, <const State*>(_state_in_.data()), <const State>state_out, <_ComputeType>compute_type, workspace_size_limit, <WorkspaceDescriptor>workspace, <Stream>stream)
-    check_status(status)
+        __status__ = cudensitymatOperatorActionPrepare(<const Handle>handle, <OperatorAction>operator_action, <const State*>(_state_in_.data()), <const State>state_out, <_ComputeType>compute_type, workspace_size_limit, <WorkspaceDescriptor>workspace, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef operator_action_compute(intptr_t handle, intptr_t operator_action, double time, int64_t batch_size, int32_t num_params, intptr_t params, state_in, intptr_t state_out, intptr_t workspace, intptr_t stream):
@@ -1123,8 +1178,8 @@ cpdef operator_action_compute(intptr_t handle, intptr_t operator_action, double 
     cdef nullable_unique_ptr[ vector[State*] ] _state_in_
     get_resource_ptrs[State](_state_in_, state_in, <State*>NULL)
     with nogil:
-        status = cudensitymatOperatorActionCompute(<const Handle>handle, <OperatorAction>operator_action, time, batch_size, num_params, <const double*>params, <const State*>(_state_in_.data()), <State>state_out, <WorkspaceDescriptor>workspace, <Stream>stream)
-    check_status(status)
+        __status__ = cudensitymatOperatorActionCompute(<const Handle>handle, <OperatorAction>operator_action, time, batch_size, num_params, <const double*>params, <const State*>(_state_in_.data()), <State>state_out, <WorkspaceDescriptor>workspace, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef intptr_t create_expectation(intptr_t handle, intptr_t superoperator) except? 0:
@@ -1141,8 +1196,8 @@ cpdef intptr_t create_expectation(intptr_t handle, intptr_t superoperator) excep
     """
     cdef Expectation expectation
     with nogil:
-        status = cudensitymatCreateExpectation(<const Handle>handle, <Operator>superoperator, &expectation)
-    check_status(status)
+        __status__ = cudensitymatCreateExpectation(<const Handle>handle, <Operator>superoperator, &expectation)
+    check_status(__status__)
     return <intptr_t>expectation
 
 
@@ -1155,8 +1210,8 @@ cpdef destroy_expectation(intptr_t expectation):
     .. seealso:: `cudensitymatDestroyExpectation`
     """
     with nogil:
-        status = cudensitymatDestroyExpectation(<Expectation>expectation)
-    check_status(status)
+        __status__ = cudensitymatDestroyExpectation(<Expectation>expectation)
+    check_status(__status__)
 
 
 cpdef expectation_prepare(intptr_t handle, intptr_t expectation, intptr_t state, int compute_type, size_t workspace_size_limit, intptr_t workspace, intptr_t stream):
@@ -1174,8 +1229,8 @@ cpdef expectation_prepare(intptr_t handle, intptr_t expectation, intptr_t state,
     .. seealso:: `cudensitymatExpectationPrepare`
     """
     with nogil:
-        status = cudensitymatExpectationPrepare(<const Handle>handle, <Expectation>expectation, <const State>state, <_ComputeType>compute_type, workspace_size_limit, <WorkspaceDescriptor>workspace, <Stream>stream)
-    check_status(status)
+        __status__ = cudensitymatExpectationPrepare(<const Handle>handle, <Expectation>expectation, <const State>state, <_ComputeType>compute_type, workspace_size_limit, <WorkspaceDescriptor>workspace, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef expectation_compute(intptr_t handle, intptr_t expectation, double time, int64_t batch_size, int32_t num_params, intptr_t params, intptr_t state, intptr_t expectation_value, intptr_t workspace, intptr_t stream):
@@ -1196,8 +1251,8 @@ cpdef expectation_compute(intptr_t handle, intptr_t expectation, double time, in
     .. seealso:: `cudensitymatExpectationCompute`
     """
     with nogil:
-        status = cudensitymatExpectationCompute(<const Handle>handle, <Expectation>expectation, time, batch_size, num_params, <const double*>params, <const State>state, <void*>expectation_value, <WorkspaceDescriptor>workspace, <Stream>stream)
-    check_status(status)
+        __status__ = cudensitymatExpectationCompute(<const Handle>handle, <Expectation>expectation, time, batch_size, num_params, <const double*>params, <const State>state, <void*>expectation_value, <WorkspaceDescriptor>workspace, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef intptr_t create_operator_spectrum(intptr_t handle, intptr_t superoperator, int32_t is_hermitian, int spectrum_kind) except? 0:
@@ -1216,8 +1271,8 @@ cpdef intptr_t create_operator_spectrum(intptr_t handle, intptr_t superoperator,
     """
     cdef OperatorSpectrum spectrum
     with nogil:
-        status = cudensitymatCreateOperatorSpectrum(<const Handle>handle, <const Operator>superoperator, is_hermitian, <_OperatorSpectrumKind>spectrum_kind, &spectrum)
-    check_status(status)
+        __status__ = cudensitymatCreateOperatorSpectrum(<const Handle>handle, <const Operator>superoperator, is_hermitian, <_OperatorSpectrumKind>spectrum_kind, &spectrum)
+    check_status(__status__)
     return <intptr_t>spectrum
 
 
@@ -1230,8 +1285,8 @@ cpdef destroy_operator_spectrum(intptr_t spectrum):
     .. seealso:: `cudensitymatDestroyOperatorSpectrum`
     """
     with nogil:
-        status = cudensitymatDestroyOperatorSpectrum(<OperatorSpectrum>spectrum)
-    check_status(status)
+        __status__ = cudensitymatDestroyOperatorSpectrum(<OperatorSpectrum>spectrum)
+    check_status(__status__)
 
 
 ######################### Python specific utility #########################
@@ -1275,8 +1330,8 @@ cpdef operator_spectrum_configure(intptr_t handle, intptr_t spectrum, int attrib
     .. seealso:: `cudensitymatOperatorSpectrumConfigure`
     """
     with nogil:
-        status = cudensitymatOperatorSpectrumConfigure(<const Handle>handle, <OperatorSpectrum>spectrum, <_OperatorSpectrumConfig>attribute, <const void*>attribute_value, attribute_value_size)
-    check_status(status)
+        __status__ = cudensitymatOperatorSpectrumConfigure(<const Handle>handle, <OperatorSpectrum>spectrum, <_OperatorSpectrumConfig>attribute, <const void*>attribute_value, attribute_value_size)
+    check_status(__status__)
 
 
 cpdef operator_spectrum_prepare(intptr_t handle, intptr_t spectrum, int32_t max_eigen_states, intptr_t state, int compute_type, size_t workspace_size_limit, intptr_t workspace, intptr_t stream):
@@ -1295,8 +1350,8 @@ cpdef operator_spectrum_prepare(intptr_t handle, intptr_t spectrum, int32_t max_
     .. seealso:: `cudensitymatOperatorSpectrumPrepare`
     """
     with nogil:
-        status = cudensitymatOperatorSpectrumPrepare(<const Handle>handle, <OperatorSpectrum>spectrum, max_eigen_states, <const State>state, <_ComputeType>compute_type, workspace_size_limit, <WorkspaceDescriptor>workspace, <Stream>stream)
-    check_status(status)
+        __status__ = cudensitymatOperatorSpectrumPrepare(<const Handle>handle, <OperatorSpectrum>spectrum, max_eigen_states, <const State>state, <_ComputeType>compute_type, workspace_size_limit, <WorkspaceDescriptor>workspace, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef operator_spectrum_compute(intptr_t handle, intptr_t spectrum, double time, int64_t batch_size, int32_t num_params, intptr_t params, int32_t num_eigen_states, eigenstates, intptr_t eigenvalues, intptr_t tolerances, intptr_t workspace, intptr_t stream):
@@ -1325,8 +1380,8 @@ cpdef operator_spectrum_compute(intptr_t handle, intptr_t spectrum, double time,
     cdef nullable_unique_ptr[ vector[State*] ] _eigenstates_
     get_resource_ptrs[State](_eigenstates_, eigenstates, <State*>NULL)
     with nogil:
-        status = cudensitymatOperatorSpectrumCompute(<const Handle>handle, <OperatorSpectrum>spectrum, time, batch_size, num_params, <const double*>params, num_eigen_states, <State*>(_eigenstates_.data()), <void*>eigenvalues, <double*>tolerances, <WorkspaceDescriptor>workspace, <Stream>stream)
-    check_status(status)
+        __status__ = cudensitymatOperatorSpectrumCompute(<const Handle>handle, <OperatorSpectrum>spectrum, time, batch_size, num_params, <const double*>params, num_eigen_states, <State*>(_eigenstates_.data()), <void*>eigenvalues, <double*>tolerances, <WorkspaceDescriptor>workspace, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef intptr_t create_workspace(intptr_t handle) except? 0:
@@ -1342,8 +1397,8 @@ cpdef intptr_t create_workspace(intptr_t handle) except? 0:
     """
     cdef WorkspaceDescriptor workspace_descr
     with nogil:
-        status = cudensitymatCreateWorkspace(<const Handle>handle, &workspace_descr)
-    check_status(status)
+        __status__ = cudensitymatCreateWorkspace(<const Handle>handle, &workspace_descr)
+    check_status(__status__)
     return <intptr_t>workspace_descr
 
 
@@ -1356,8 +1411,8 @@ cpdef destroy_workspace(intptr_t workspace_descr):
     .. seealso:: `cudensitymatDestroyWorkspace`
     """
     with nogil:
-        status = cudensitymatDestroyWorkspace(<WorkspaceDescriptor>workspace_descr)
-    check_status(status)
+        __status__ = cudensitymatDestroyWorkspace(<WorkspaceDescriptor>workspace_descr)
+    check_status(__status__)
 
 
 cpdef size_t workspace_get_memory_size(intptr_t handle, intptr_t workspace_descr, int mem_space, int workspace_kind) except? -1:
@@ -1376,8 +1431,8 @@ cpdef size_t workspace_get_memory_size(intptr_t handle, intptr_t workspace_descr
     """
     cdef size_t memory_buffer_size
     with nogil:
-        status = cudensitymatWorkspaceGetMemorySize(<const Handle>handle, <const WorkspaceDescriptor>workspace_descr, <_Memspace>mem_space, <_WorkspaceKind>workspace_kind, &memory_buffer_size)
-    check_status(status)
+        __status__ = cudensitymatWorkspaceGetMemorySize(<const Handle>handle, <const WorkspaceDescriptor>workspace_descr, <_Memspace>mem_space, <_WorkspaceKind>workspace_kind, &memory_buffer_size)
+    check_status(__status__)
     return memory_buffer_size
 
 
@@ -1395,8 +1450,8 @@ cpdef workspace_set_memory(intptr_t handle, intptr_t workspace_descr, int mem_sp
     .. seealso:: `cudensitymatWorkspaceSetMemory`
     """
     with nogil:
-        status = cudensitymatWorkspaceSetMemory(<const Handle>handle, <WorkspaceDescriptor>workspace_descr, <_Memspace>mem_space, <_WorkspaceKind>workspace_kind, <void*>memory_buffer, memory_buffer_size)
-    check_status(status)
+        __status__ = cudensitymatWorkspaceSetMemory(<const Handle>handle, <WorkspaceDescriptor>workspace_descr, <_Memspace>mem_space, <_WorkspaceKind>workspace_kind, <void*>memory_buffer, memory_buffer_size)
+    check_status(__status__)
 
 
 cpdef tuple workspace_get_memory(intptr_t handle, intptr_t workspace_descr, int mem_space, int workspace_kind):
@@ -1419,9 +1474,41 @@ cpdef tuple workspace_get_memory(intptr_t handle, intptr_t workspace_descr, int 
     cdef void* memory_buffer
     cdef size_t memory_buffer_size
     with nogil:
-        status = cudensitymatWorkspaceGetMemory(<const Handle>handle, <const WorkspaceDescriptor>workspace_descr, <_Memspace>mem_space, <_WorkspaceKind>workspace_kind, &memory_buffer, &memory_buffer_size)
-    check_status(status)
+        __status__ = cudensitymatWorkspaceGetMemory(<const Handle>handle, <const WorkspaceDescriptor>workspace_descr, <_Memspace>mem_space, <_WorkspaceKind>workspace_kind, &memory_buffer, &memory_buffer_size)
+    check_status(__status__)
     return (<intptr_t>memory_buffer, memory_buffer_size)
+
+
+cpdef elementary_operator_attach_buffer(intptr_t handle, intptr_t elem_operator, intptr_t buffer, size_t buffer_size):
+    """Attaches a buffer to the elementary tensor operator (either batched or non-batched).
+
+    Args:
+        handle (intptr_t): Library handle.
+        elem_operator (intptr_t): Elementary tensor operator (either batched or non-batched).
+        buffer (intptr_t): GPU-accessible pointer to the tensor operator elements storage.
+        buffer_size (size_t): Size of the memory buffer in bytes.
+
+    .. seealso:: `cudensitymatElementaryOperatorAttachBuffer`
+    """
+    with nogil:
+        __status__ = cudensitymatElementaryOperatorAttachBuffer(<const Handle>handle, <ElementaryOperator>elem_operator, <void*>buffer, buffer_size)
+    check_status(__status__)
+
+
+cpdef matrix_operator_dense_local_attach_buffer(intptr_t handle, intptr_t matrix_operator, intptr_t buffer, size_t buffer_size):
+    """Attaches a buffer to the full dense local matrix operator (either batched or non-batched).
+
+    Args:
+        handle (intptr_t): Library handle.
+        matrix_operator (intptr_t): Full dense local matrix operator (either batched or non-batched).
+        buffer (intptr_t): GPU-accessible pointer to the matrix operator elements storage.
+        buffer_size (size_t): Size of the memory buffer in bytes.
+
+    .. seealso:: `cudensitymatMatrixOperatorDenseLocalAttachBuffer`
+    """
+    with nogil:
+        __status__ = cudensitymatMatrixOperatorDenseLocalAttachBuffer(<const Handle>handle, <MatrixOperator>matrix_operator, <void*>buffer, buffer_size)
+    check_status(__status__)
 
 ###############################################################################
 # Handwritten functions

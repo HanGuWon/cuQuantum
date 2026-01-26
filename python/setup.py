@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -34,20 +34,20 @@ with open(os.path.join(source_root, "tests/requirements.txt")) as f:
 #   need to list it
 install_requires = [
     'numpy>=1.21, <3.0',  # ">=1.21,<3"
-    'nvmath-python==0.6.0', # strict version before nvmath.internal module is stable
+    'nvmath-python==0.7.0', # strict version before nvmath.internal module is stable
     # 'torch', # <-- PyTorch is optional; also, the PyPI version does not support GPU...
-    f'custatevec-cu{utils.cuda_major_ver}~=1.11',  # ">=1.11.0,<2"
-    f'cutensornet-cu{utils.cuda_major_ver}>=2.10.1, <3',  # ">=2.10.0,<3"
-    f'cudensitymat-cu{utils.cuda_major_ver}>=0.3.2, <0.4', # ">=0.3.2,<0.4.0"
-    f'cupauliprop-cu{utils.cuda_major_ver}>=0.1.0, <0.2', # ">=0.1.0,<0.2.0"
-    f'custabilizer-cu{utils.cuda_major_ver}>=0.1.0, <0.2', # ">=0.1.0,<0.2.0"
+    f'custatevec-cu{utils.cuda_major_ver}~=1.12',  # ">=1.12.0,<2"
+    f'cutensornet-cu{utils.cuda_major_ver}~=2.11',  # ">=2.11.0,<3"
+    f'cudensitymat-cu{utils.cuda_major_ver}>=0.4.0, <0.5', # ">=0.4.0,<0.5.0"
+    f'cupauliprop-cu{utils.cuda_major_ver}>=0.2.0, <0.3', # ">=0.2.0,<0.3.0"
+    f'custabilizer-cu{utils.cuda_major_ver}>=0.2.0, <0.3', # ">=0.2.0,<0.3.0"
 ]
 if utils.cuda_major_ver == '12':
     install_requires.append('cupy-cuda12x>=13.0')  # no ambiguity
-    install_requires.append('cuda-bindings>=12.9.2, <13.0.0')
+    install_requires.append('cuda-bindings>=12.9.4, <13.0.0')
 elif utils.cuda_major_ver == '13':
     install_requires.append('cupy-cuda13x>=13.6.0')  # no ambiguity
-    install_requires.append('cuda-bindings>=13.0.1, <14.0.0')
+    install_requires.append('cuda-bindings>=13.0.3, <14.0.0')
 
 # WAR: Check if this is still valid
 # TODO: can this support cross-compilation?

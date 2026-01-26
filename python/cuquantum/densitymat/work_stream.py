@@ -6,11 +6,14 @@ __all__ = ["WorkStream"]
 
 from dataclasses import dataclass
 from logging import Logger, getLogger
-from typing import Optional, Union, Tuple
+from typing import Optional, Union, Tuple, TYPE_CHECKING
 import weakref
 import collections
 
 import cupy as cp
+
+if TYPE_CHECKING:
+    import mpi4py.MPI
 
 from nvmath.internal import utils as nvmath_utils
 from nvmath.internal.mem_limit import check_memory_str
@@ -55,11 +58,11 @@ class WorkStream:
 
     Methods:
 
-        set_communicator(comm: "mpi4py.MPI.Comm" | Tuple[int,int], provider="None") -> None
+        set_communicator(comm: "mpi4py.MPI.Comm" | Tuple[int,int] | int | None, provider="None") -> None
             Register a communicator with the library.
-            The communicator can be passed either as a a ``mpi4py.MPI.Comm`` object or
-            as a Tuple of two integers, the pointer to the communicater and the size (in bytes) of the communicator.
-            Currently the only supported provider is ``"MPI"``.
+            For ``"MPI"`` provider: pass an ``mpi4py.MPI.Comm`` object, an integer pointer, or a tuple of (pointer, size).
+            For ``"NCCL"`` provider: pass an integer pointer or a tuple of (pointer, size) pointing to an existing ``ncclComm_t``.
+            For ``"None"`` provider: pass ``comm=None`` to disable distributed execution.
 
         get_proc_rank() -> int
             Return the process rank if a communicator was set previously via :meth:`WorkStream.set_communicator`.
@@ -186,11 +189,34 @@ class WorkStream:
         return self._size_scratch, self._required_size_upper_bound
 
     def set_communicator(
-        self, comm: "mpi4py.MPI.Comm" | Tuple[int, int], provider: str = "None"
+        self,
+        comm: "mpi4py.MPI.Comm | Tuple[int, int] | int | None" = None,
+        provider: str = "None",
     ) -> None:
         """
         Register a communicator with the library.
-        Currently only ``mpi4py.Comm`` objects are supported and the only supported provider is "MPI".
+
+        Args:
+            comm: The communicator to use. Accepted types depend on the provider:
+
+                - For ``"MPI"``: an ``mpi4py.MPI.Comm`` instance, an integer pointer, or a tuple of (pointer, size).
+                - For ``"NCCL"``: an integer pointer or a tuple of (pointer, size) for an existing ``ncclComm_t``.
+                - For ``"None"``: comm should be ``None``.
+
+            provider: The communication backend - ``"None"``, ``"MPI"``, or ``"NCCL"``.
+
+        Examples:
+            Using MPI with explicit communicator::
+
+                from mpi4py import MPI
+                ctx = WorkStream()
+                ctx.set_communicator(MPI.COMM_WORLD, provider="MPI")
+
+            Using NCCL with an existing communicator::
+
+                nccl_comm_ptr = ...
+                ctx = WorkStream(device_id=local_rank)
+                ctx.set_communicator(nccl_comm_ptr, provider="NCCL")
         """
         self._handle.set_communicator(comm, provider)
 

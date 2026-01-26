@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -115,10 +115,16 @@ def parse_modes_extents(extent_map, split_expression):
     return modes_in, left_modes_out, right_modes_out, shared_mode_out, shared_modes_duplicated, min(left_extent, right_extent)
 
 
-def infer_contracted_output_modes(modes_in):
-    modes_in = modes_in.replace(",","")
-    modes_out = "".join([mode for mode in modes_in if modes_in.count(mode)==1])
-    return modes_out
+def infer_contracted_output_modes(modes_in, hyper_modes=None):
+    modes = modes_in.replace(",", "")
+    from collections import Counter
+    c = Counter(modes)
+    out = []
+    for idx in modes:
+        if c[idx] == 1 or (hyper_modes is not None and idx in hyper_modes):
+            if idx not in out:
+                out.append(idx)
+    return "".join(out)
 
 
 def compute_size(size_dict, modes):
@@ -364,8 +370,16 @@ def gate_decompose(
     einsum_kwargs = get_einsum_kwargs(package)
     left_modes_in, right_modes_in, modes_g = modes_in.split(",")
     
+    # If all gate modes already exist in MPS, it's a diagonal gate (hyper_modes = gate_modes)
+    mps_modes = set(left_modes_in + right_modes_in)
+    gate_modes = set(modes_g)
+    hyper_modes = None if gate_modes - mps_modes else gate_modes
+    
+    if hyper_modes is not None and gate_algo == "reduced":
+        raise ValueError("hyper modes not supported in reduced gate decompose")
+
     if gate_algo == "direct":
-        modes_intm = infer_contracted_output_modes(modes_in)
+        modes_intm = infer_contracted_output_modes(modes_in, hyper_modes)
         T = backend.einsum(f"{modes_in}->{modes_intm}", array_a, array_b, array_g, **einsum_kwargs)
         svd_expression = f"{modes_intm}->{left_modes_out},{right_modes_out}"
         return tensor_decompose(svd_expression, T, method='svd', return_info=return_info, **kwargs)

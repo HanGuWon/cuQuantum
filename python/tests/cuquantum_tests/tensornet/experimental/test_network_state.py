@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -10,7 +10,7 @@ from nvmath.internal.utils import infer_object_package
 from nvmath.internal.tensor_wrapper import wrap_operand
 
 from cuquantum.tensornet import CircuitToEinsum
-from cuquantum.tensornet.experimental import NetworkState, MPSConfig, TNConfig
+from cuquantum.tensornet.experimental import NetworkState, MPSConfig, TNConfig, NetworkOperator
 
 from ..utils.data import ARRAY_BACKENDS
 from ..utils.helpers import TensorBackend, _BaseTester, get_contraction_tolerance
@@ -113,6 +113,80 @@ class TestNetworkStateBasicFunctionality(_BaseTester):
             sv = state.compute_state_vector()
             tol = get_contraction_tolerance(state.dtype)
             QuantumStateTestHelper.verify_state_vector(sv, sv_ref, **tol)
+        
+        np.random.seed(2)
+        state_dims = (2, 5, 2, 2)
+        op01 = np.random.randn(2, 5, 2, 5)
+        op12 = np.random.randn(5, 2, 5, 2)
+        op02 = np.random.randn(2, 2, 2, 2)
+
+        # exact TN simulation
+        with NetworkState(state_dims, dtype="float64", config=TNConfig()) as state:
+            state.apply_tensor_operator((0, 1), op01)
+            state.apply_tensor_operator((1, 2), op12)
+            state.apply_tensor_operator((0, 2), op02)
+            sv_tn = state.compute_state_vector()
+        
+        # exact MPS simulation
+        with NetworkState(state_dims, dtype="float64", config=MPSConfig()) as state:
+            state.apply_tensor_operator((0, 1), op01)
+            state.apply_tensor_operator((1, 2), op12)
+            state.apply_tensor_operator((0, 2), op02)
+            sv_mps = state.compute_state_vector()
+        
+        tol = get_contraction_tolerance(state.dtype)
+        np.testing.assert_allclose(sv_tn, sv_mps, **tol)
+
+    def test_control_values_default(self):
+        """Test that control_values=None defaults to 1 for all control modes.
+        
+        This test verifies the fix for the bug where control_values=None 
+        caused a TypeError instead of defaulting to 1 as documented.
+        """
+        # Create a 3-qubit state
+        state_dims = (2, 2, 2)
+        
+        # X gate (Pauli-X)
+        x_gate = np.array([[0, 1], [1, 0]], dtype=np.complex128)
+        
+        # Test 1: control_values=None should work and default to 1
+        with NetworkState(state_dims, dtype="complex128") as state:
+            # Initialize with identity
+            identity = np.eye(2, dtype=np.complex128)
+            state.apply_tensor_operator((0,), identity, unitary=True)
+            state.apply_tensor_operator((1,), identity, unitary=True)
+            state.apply_tensor_operator((2,), identity, unitary=True)
+            
+            # Apply controlled-X with control_values=None (should default to 1)
+            state.apply_tensor_operator(
+                (0,), x_gate, 
+                control_modes=(1,), 
+                control_values=None,  # This was causing TypeError before fix
+                unitary=True, 
+                immutable=True
+            )
+            sv_none = state.compute_state_vector()
+        
+        # Test 2: control_values=(1,) explicit
+        with NetworkState(state_dims, dtype="complex128") as state:
+            identity = np.eye(2, dtype=np.complex128)
+            state.apply_tensor_operator((0,), identity, unitary=True)
+            state.apply_tensor_operator((1,), identity, unitary=True)
+            state.apply_tensor_operator((2,), identity, unitary=True)
+            
+            # Apply controlled-X with explicit control_values=(1,)
+            state.apply_tensor_operator(
+                (0,), x_gate, 
+                control_modes=(1,), 
+                control_values=(1,),  # Explicit value
+                unitary=True, 
+                immutable=True
+            )
+            sv_explicit = state.compute_state_vector()
+        
+        # Both should produce identical results
+        tol = get_contraction_tolerance("complex128")
+        QuantumStateTestHelper.verify_state_vector(sv_none, sv_explicit, **tol)
     
     def test_batched_amplitudes_usage(self, exact_config):
         state = NetworkState((2, 2), dtype='float64', config=exact_config)
@@ -157,6 +231,54 @@ class TestNetworkStateBasicFunctionality(_BaseTester):
             samples_1 = state.compute_sampling(nshots)
             samples_2 = state.compute_sampling(nshots, seed=123)
             assert len(samples_1) == len(samples_2) == 16
+
+    def test_ghz_sampling_large(self):
+        """Test sampling from a GHZ circuit with large number of qubits
+        
+        GHZ state: (|00...0⟩ + |11...1⟩) / √2
+        - Only 2 possible outcomes: all-zeros or all-ones
+        - Each has 50% probability
+        
+        Statistical test: With N=10000 samples, 1% tolerance
+        """
+        backend = self._get_array_framework("test_ghz_sampling_large")
+
+        try:
+            import qiskit
+        except ImportError:
+            pytest.skip("qiskit not installed")
+
+        n_qubits = 26
+        circuit = qiskit.QuantumCircuit(n_qubits)
+        
+        # Create GHZ state: H on qubit 0, then CNOT chain
+        circuit.h(0)
+        for i in range(n_qubits - 1):
+            circuit.cx(i, i + 1)
+
+        nshots = 10000
+        with NetworkState.from_circuit(circuit, backend=backend) as state:
+            samples = state.compute_sampling(nshots, seed=42)
+
+        # GHZ state should only produce all-zeros or all-ones
+        all_zeros = '0' * n_qubits
+        all_ones = '1' * n_qubits
+        assert set(samples.keys()).issubset({all_zeros, all_ones}), \
+            f"Unexpected bitstrings in GHZ sampling: {set(samples.keys()) - {all_zeros, all_ones}}"
+
+        # Both outcomes should appear (with overwhelming probability for 10000 samples)
+        assert all_zeros in samples and all_ones in samples, \
+            f"Expected both |0...0⟩ and |1...1⟩ in samples, got: {samples}"
+
+        # Check that distribution is close to 50/50
+        total = sum(samples.values())
+        p_zeros = samples.get(all_zeros, 0) / total
+        p_ones = samples.get(all_ones, 0) / total
+        
+        assert abs(p_zeros - 0.5) < 0.01, \
+            f"GHZ |0...0⟩ probability {p_zeros:.3f} deviates >1% from expected 0.5"
+        assert abs(p_ones - 0.5) < 0.01, \
+            f"GHZ |1...1⟩ probability {p_ones:.3f} deviates >1% from expected 0.5"
     
     @pytest.mark.parametrize("factory", GenericStateMatrix.L1())
     def test_mps_release_operators(self, factory):
@@ -207,9 +329,9 @@ class TestNetworkStateBasicFunctionality(_BaseTester):
     @pytest.mark.parametrize(
         "config", ({}, {'max_extent': 2}, {'rel_cutoff': 0.12, 'gauge_option': 'simple'})
     )
-    @pytest.mark.parametrize("with_control", (True, False))
+    @pytest.mark.parametrize("with_control", (False, True))
     def test_update_reuse_correctness(self, config, with_control):
-        (state_a, op_two_body_x), (state_b, op_two_body_y), operator, two_body_op_ids = create_vqc_states(config, "numpy", with_control=with_control)
+        (state_a, op_two_body_x, op_two_body_diagonal_x), (state_b, op_two_body_y, op_two_body_diagonal_y), operator, two_body_op_ids = create_vqc_states(config, "numpy", with_control=with_control)
         if isinstance(state_a.config, TNConfig):
             tolerance = get_contraction_tolerance("complex128")
         else:
@@ -225,9 +347,14 @@ class TestNetworkStateBasicFunctionality(_BaseTester):
             e, norm = state.compute_expectation(operator, return_norm=True)
             original_expec.append(e/norm)
         
-        for tensor_id in two_body_op_ids:
-            state_a.update_tensor_operator(tensor_id, op_two_body_y, unitary=False)
-            state_b.update_tensor_operator(tensor_id, op_two_body_x, unitary=False)
+        for i in range(len(two_body_op_ids)):
+            tensor_id = two_body_op_ids[i]
+            if i == 0 or i == 3:
+                state_a.update_tensor_operator(tensor_id, op_two_body_diagonal_y, unitary=False)
+                state_b.update_tensor_operator(tensor_id, op_two_body_diagonal_x, unitary=False)
+            else:
+                state_a.update_tensor_operator(tensor_id, op_two_body_y, unitary=False)
+                state_b.update_tensor_operator(tensor_id, op_two_body_x, unitary=False)
         
         updated_expec = []
         for state in [state_b, state_a]:
@@ -242,9 +369,14 @@ class TestNetworkStateBasicFunctionality(_BaseTester):
         for state in [state_b, state_a]:
             original_sv.append(state.compute_state_vector())
         
-        for tensor_id in two_body_op_ids:
-            state_a.update_tensor_operator(tensor_id, op_two_body_x, unitary=False)
-            state_b.update_tensor_operator(tensor_id, op_two_body_y, unitary=False)
+        for i in range(len(two_body_op_ids)):
+            tensor_id = two_body_op_ids[i]
+            if i == 0 or i == 3:
+                state_a.update_tensor_operator(tensor_id, op_two_body_diagonal_x, unitary=False)
+                state_b.update_tensor_operator(tensor_id, op_two_body_diagonal_y, unitary=False)
+            else:
+                state_a.update_tensor_operator(tensor_id, op_two_body_x, unitary=False)
+                state_b.update_tensor_operator(tensor_id, op_two_body_y, unitary=False)
         
         updated_sv = []
         for state in [state_a, state_b]:
@@ -362,6 +494,20 @@ class TestNetworkStateBasicFunctionality(_BaseTester):
         with state:
             mps = state.compute_output_state()
             assert mps is not None
+    
+
+    @pytest.mark.parametrize("remove_identity", (True, False, 'auto'))
+    def test_expectation_from_pauli_strings(self, circuit_L0, exact_config, circuit_exact_sv_L0, remove_identity):
+        n_qubits = len(CircuitHelper.get_qubits(circuit_L0))
+        with NetworkState.from_circuit(circuit_L0, backend="numpy", config=exact_config) as state:
+            n_qubits = state.n
+            pauli_strings = CircuitHelper.get_random_pauli_strings(n_qubits, 10, np.random.default_rng(4))
+            tn_operator = NetworkOperator.from_pauli_strings(
+                pauli_strings, backend="numpy", dtype=state.dtype, options=state.options, remove_identity=remove_identity)
+
+            exp = state.compute_expectation(tn_operator)
+            exp_ref = PropertyComputeHelper.expectation_from_sv(circuit_exact_sv_L0, pauli_strings)
+            assert TensorBackend.verify_close(exp, exp_ref)
 
 
 @pytest.fixture(params=CircuitStateMatrix.L1(), scope="class")
@@ -426,7 +572,6 @@ class TestExactGenericState(BaseGenericStateTester):
     
     def test_sampling(self, factory_L1, exact_config, sv_factory_L1):
         super().test_sampling(factory_L1, exact_config, sv_factory_L1, NUM_TESTS_PER_CONFIG)
-    
 
 @pytest.fixture(params=CircuitStateMatrix.L2(), scope="class")
 def circuit_L2(request):

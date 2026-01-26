@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -141,12 +141,6 @@ class TestHandle:
     def test_handle_create_destroy(self):
         # Simple round-trip test
         pass
-    
-    @manage_resource('handle')
-    def test_set_stream(self):
-        stream = cp.cuda.Stream()
-        cupp.set_stream(self.handle, stream.ptr)
-        stream.synchronize()
 
 
 class TestWorkspaceDescriptor:
@@ -210,9 +204,9 @@ class TestPauliExpansion:
             self.handle, self.pauli_expansion)
         assert data_type == NAME_TO_DATA_TYPE[np.dtype(self.dtype).name]
         
-        is_sorted = cupp.pauli_expansion_is_sorted(
+        sort_order = cupp.pauli_expansion_get_sort_order(
             self.handle, self.pauli_expansion)
-        assert isinstance(is_sorted, (int, np.integer))
+        assert isinstance(sort_order, (int, np.integer))
         
         is_dedup = cupp.pauli_expansion_is_deduplicated(
             self.handle, self.pauli_expansion)
@@ -270,10 +264,11 @@ class TestPauliExpansionViewOperations:
     @manage_resource('pauli_expansion')
     @manage_resource('pauli_expansion_view')
     @manage_resource('workspace')
-    def test_view_prepare_canonical_sort(self):
+    def test_view_prepare_sort(self):
         max_workspace = 1 << 30
-        cupp.pauli_expansion_view_prepare_canonical_sort(
+        cupp.pauli_expansion_view_prepare_sort(
             self.handle, self.pauli_expansion_view,
+            cupp.SortOrder.LITTLE_ENDIAN_BITWISE,
             max_workspace, self.workspace)
         
         ws_size = cupp.workspace_get_memory_size(
@@ -576,3 +571,59 @@ class TestEnums:
     def test_truncation_strategy_kind_enum(self):
         assert hasattr(cupp.TruncationStrategyKind, 'TRUNCATION_STRATEGY_COEFFICIENT_BASED')
         assert hasattr(cupp.TruncationStrategyKind, 'TRUNCATION_STRATEGY_PAULI_WEIGHT_BASED')
+    
+    def test_sort_order_enum(self):
+        assert hasattr(cupp.SortOrder, 'NONE')
+        assert hasattr(cupp.SortOrder, 'INTERNAL')
+        assert hasattr(cupp.SortOrder, 'LITTLE_ENDIAN_BITWISE')
+    
+    def test_sort_order_enum_values_match_cpp(self):
+        """
+        Verify that SortOrder enum values in Cython bindings match C++ header.
+        
+        The C++ header (cupauliprop.h) defines:
+            CUPAULIPROP_SORT_ORDER_NONE = 0
+            CUPAULIPROP_SORT_ORDER_INTERNAL = 1
+            CUPAULIPROP_SORT_ORDER_LITTLE_ENDIAN_BITWISE = 2
+        
+        Note: NULL is renamed to NONE to avoid Cython reserved word conflict.
+        """
+        assert int(cupp.SortOrder.NONE) == 0, f"SORT_ORDER_NONE should be 0, got {int(cupp.SortOrder.NONE)}"
+        assert int(cupp.SortOrder.INTERNAL) == 1, f"SORT_ORDER_INTERNAL should be 1, got {int(cupp.SortOrder.INTERNAL)}"
+        assert int(cupp.SortOrder.LITTLE_ENDIAN_BITWISE) == 2, f"SORT_ORDER_LITTLE_ENDIAN_BITWISE should be 2, got {int(cupp.SortOrder.LITTLE_ENDIAN_BITWISE)}"
+    
+    def test_pauli_kind_enum_values_match_cpp(self):
+        """
+        Verify that PauliKind enum values in Cython bindings match C++ header.
+        
+        The C++ header (cupauliprop.h) defines:
+            CUPAULIPROP_PAULI_I = 0
+            CUPAULIPROP_PAULI_X = 1
+            CUPAULIPROP_PAULI_Y = 2
+            CUPAULIPROP_PAULI_Z = 3
+        
+        This test catches any mismatch between C++ enum ordering and Python bindings.
+        """
+        assert int(cupp.PauliKind.PAULI_I) == 0, f"PAULI_I should be 0, got {int(cupp.PauliKind.PAULI_I)}"
+        assert int(cupp.PauliKind.PAULI_X) == 1, f"PAULI_X should be 1, got {int(cupp.PauliKind.PAULI_X)}"
+        assert int(cupp.PauliKind.PAULI_Y) == 2, f"PAULI_Y should be 2, got {int(cupp.PauliKind.PAULI_Y)}"
+        assert int(cupp.PauliKind.PAULI_Z) == 3, f"PAULI_Z should be 3, got {int(cupp.PauliKind.PAULI_Z)}"
+    
+    def test_clifford_gate_enum_values_match_cpp(self):
+        """
+        Verify that CliffordGateKind enum values in Cython bindings match C++ header.
+        
+        The C++ header (cupauliprop.h) defines:
+            CUPAULIPROP_CLIFFORD_GATE_I = 0
+            CUPAULIPROP_CLIFFORD_GATE_X = 1
+            CUPAULIPROP_CLIFFORD_GATE_Y = 2
+            CUPAULIPROP_CLIFFORD_GATE_Z = 3
+            CUPAULIPROP_CLIFFORD_GATE_H = 4
+            CUPAULIPROP_CLIFFORD_GATE_S = 5
+        """
+        assert int(cupp.CliffordGateKind.CLIFFORD_GATE_I) == 0
+        assert int(cupp.CliffordGateKind.CLIFFORD_GATE_X) == 1
+        assert int(cupp.CliffordGateKind.CLIFFORD_GATE_Y) == 2
+        assert int(cupp.CliffordGateKind.CLIFFORD_GATE_Z) == 3
+        assert int(cupp.CliffordGateKind.CLIFFORD_GATE_H) == 4
+        assert int(cupp.CliffordGateKind.CLIFFORD_GATE_S) == 5

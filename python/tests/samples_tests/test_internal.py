@@ -39,11 +39,13 @@ def test_non_empty_testing_samples(samples):
 def test_samples_included(sample):
     if sample.endswith('.py'):
         if sample not in testing_python_samples:
-            # This must be either a pythonic mpi sample under 'samples/tensornet/' 
-            # or an mpi sample using bindings under 'samples/bindings/cutensornet/' 
-            # or an mpi sample using bindings under 'samples/bindings/custatevec/
+            # This must be either:
+            # - a pythonic mpi sample under 'samples/tensornet/' 
+            # - an mpi sample using bindings under 'samples/bindings/cutensornet/' 
+            # - an mpi sample using bindings under 'samples/bindings/custatevec/
+            # - an mpi or nccl sample under 'samples/densitymat/'
             assert '_mpi' in sample
-            assert 'bindings/custatevec' in sample or 'bindings/cutensornet' in sample or '/tensornet' in sample
+            assert 'bindings/custatevec' in sample or 'bindings/cutensornet' in sample or '/tensornet' in sample or '/densitymat' in sample
     elif sample.endswith('.ipynb'):
         assert sample in testing_notebook_samples
     else:

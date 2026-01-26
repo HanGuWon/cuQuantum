@@ -1,8 +1,8 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# This code was automatically generated across versions from 23.03.0 to 25.11.0. Do not modify it directly.
+# This code was automatically generated across versions from 23.03.0 to 26.01.0. Do not modify it directly.
 # This layer exposes the C header to Cython as-is.
 
 from libc.stdint cimport int32_t, int64_t, uint32_t, uint64_t
@@ -283,21 +283,26 @@ ctypedef void* cutensornetNetworkAutotunePreference_t 'cutensornetNetworkAutotun
 ctypedef struct cutensornetNodePair_t 'cutensornetNodePair_t':
     int32_t first
     int32_t second
+
 ctypedef struct cutensornetSliceInfoPair_t 'cutensornetSliceInfoPair_t':
     int32_t slicedMode
     int64_t slicedExtent
+
 ctypedef struct cutensornetTensorQualifiers_t 'cutensornetTensorQualifiers_t':
     int32_t isConjugate
     int32_t isConstant
     int32_t requiresGradient
+
 ctypedef struct cutensornetDeviceMemHandler_t 'cutensornetDeviceMemHandler_t':
     void* ctx
     int (*device_alloc)(void*, void**, size_t, cudaStream_t)
     int (*device_free)(void*, void*, size_t, cudaStream_t)
     char name[64]
+
 ctypedef struct cutensornetDistributedCommunicator_t 'cutensornetDistributedCommunicator_t':
     void* commPtr
     size_t commSize
+
 ctypedef struct cutensornetDistributedInterface_t 'cutensornetDistributedInterface_t':
     int version
     int (*getNumRanks)(const cutensornetDistributedCommunicator_t*, int32_t*)
@@ -310,23 +315,30 @@ ctypedef struct cutensornetDistributedInterface_t 'cutensornetDistributedInterfa
     int (*AllreduceInPlaceMin)(const cutensornetDistributedCommunicator_t*, void*, int32_t, cudaDataType_t)
     int (*AllreduceDoubleIntMinloc)(const cutensornetDistributedCommunicator_t*, const void*, void*)
     int (*Allgather)(const cutensornetDistributedCommunicator_t*, const void*, void*, int32_t, cudaDataType_t)
+
 ctypedef struct cutensornetTensorIDList_t 'cutensornetTensorIDList_t':
     int32_t numTensors
     int32_t* data
+
 ctypedef struct cutensornetGesvdjParams_t 'cutensornetGesvdjParams_t':
     double tol
     int32_t maxSweeps
+
 ctypedef struct cutensornetGesvdrParams_t 'cutensornetGesvdrParams_t':
     int64_t oversampling
     int64_t niters
+
 ctypedef struct cutensornetGesvdjStatus_t 'cutensornetGesvdjStatus_t':
     double residual
     int32_t sweeps
+
 ctypedef struct cutensornetGesvdpStatus_t 'cutensornetGesvdpStatus_t':
     double errSigma
+
 ctypedef struct cutensornetMPSEnvBounds_t 'cutensornetMPSEnvBounds_t':
     int32_t lowerBound
     int32_t upperBound
+
 ctypedef void (*cutensornetLoggerCallback_t 'cutensornetLoggerCallback_t')(
     int32_t logLevel,
     const char* functionName,
@@ -341,9 +353,11 @@ ctypedef void (*cutensornetLoggerCallbackData_t 'cutensornetLoggerCallbackData_t
 ctypedef struct cutensornetContractionPath_t 'cutensornetContractionPath_t':
     int32_t numContractions
     cutensornetNodePair_t* data
+
 ctypedef struct cutensornetSlicingConfig_t 'cutensornetSlicingConfig_t':
     uint32_t numSlicedModes
     cutensornetSliceInfoPair_t* data
+
 
 ###############################################################################
 # Functions
@@ -491,3 +505,4 @@ cdef cutensornetStatus_t cutensornetNetworkSetAdjointTensorMemory(const cutensor
 cdef cutensornetStatus_t cutensornetNetworkContract(const cutensornetHandle_t handle, cutensornetNetworkDescriptor_t networkDesc, int32_t accumulateOutput, const cutensornetWorkspaceDescriptor_t workDesc, const cutensornetSliceGroup_t sliceGroup, cudaStream_t stream) except?_CUTENSORNETSTATUS_T_INTERNAL_LOADING_ERROR nogil
 cdef cutensornetStatus_t cutensornetNetworkPrepareGradientsBackward(const cutensornetHandle_t handle, cutensornetNetworkDescriptor_t networkDesc, const cutensornetWorkspaceDescriptor_t workDesc) except?_CUTENSORNETSTATUS_T_INTERNAL_LOADING_ERROR nogil
 cdef cutensornetStatus_t cutensornetNetworkComputeGradientsBackward(const cutensornetHandle_t handle, cutensornetNetworkDescriptor_t networkDesc, int32_t accumulateOutput, const cutensornetWorkspaceDescriptor_t workDesc, const cutensornetSliceGroup_t sliceGroup, cudaStream_t stream) except?_CUTENSORNETSTATUS_T_INTERNAL_LOADING_ERROR nogil
+cdef cutensornetStatus_t cutensornetStateApplyDiagonalTensorOperator(const cutensornetHandle_t handle, cutensornetState_t tensorNetworkState, int32_t numStateModes, const int32_t* stateModes, void* tensorData, const int64_t* tensorModeStrides, const int32_t immutable, const int32_t adjoint, const int32_t unitary, int64_t* tensorId) except?_CUTENSORNETSTATUS_T_INTERNAL_LOADING_ERROR nogil

@@ -1,8 +1,8 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# This code was automatically generated with version 25.09.0. Do not modify it directly.
+# This code was automatically generated with version 26.01.0. Do not modify it directly.
 
 from libc.stdint cimport int32_t, int64_t, uint32_t, uint64_t
 from libc.stdio cimport FILE
@@ -45,6 +45,7 @@ ctypedef enum cudensitymatComputeType_t "cudensitymatComputeType_t":
 ctypedef enum cudensitymatDistributedProvider_t "cudensitymatDistributedProvider_t":
     CUDENSITYMAT_DISTRIBUTED_PROVIDER_NONE "CUDENSITYMAT_DISTRIBUTED_PROVIDER_NONE" = 0
     CUDENSITYMAT_DISTRIBUTED_PROVIDER_MPI "CUDENSITYMAT_DISTRIBUTED_PROVIDER_MPI" = 1
+    CUDENSITYMAT_DISTRIBUTED_PROVIDER_NCCL "CUDENSITYMAT_DISTRIBUTED_PROVIDER_NCCL" = 2
 
 ctypedef enum cudensitymatCallbackDevice_t "cudensitymatCallbackDevice_t":
     CUDENSITYMAT_CALLBACK_DEVICE_CPU "CUDENSITYMAT_CALLBACK_DEVICE_CPU"
@@ -124,9 +125,11 @@ ctypedef struct cudensitymatTimeRange_t 'cudensitymatTimeRange_t':
     double timeStep
     int64_t numPoints
     double* points
+
 ctypedef struct cudensitymatDistributedCommunicator_t 'cudensitymatDistributedCommunicator_t':
     void* commPtr
     size_t commSize
+
 ctypedef int32_t (*cudensitymatScalarCallback_t 'cudensitymatScalarCallback_t')(
     double time,
     int64_t batchSize,
@@ -178,11 +181,13 @@ ctypedef struct cudensitymatDistributedInterface_t 'cudensitymatDistributedInter
     int (*getNumRanks)(const cudensitymatDistributedCommunicator_t*, int32_t*)
     int (*getNumRanksShared)(const cudensitymatDistributedCommunicator_t*, int32_t*)
     int (*getProcRank)(const cudensitymatDistributedCommunicator_t*, int32_t*)
-    int (*barrier)(const cudensitymatDistributedCommunicator_t*)
+    int (*barrier)(const cudensitymatDistributedCommunicator_t*, void*)
     int (*createRequest)(cudensitymatDistributedRequest_t*)
     int (*destroyRequest)(cudensitymatDistributedRequest_t)
     int (*waitRequest)(cudensitymatDistributedRequest_t)
     int (*testRequest)(cudensitymatDistributedRequest_t, int32_t*)
+    int (*groupStart)()
+    int (*groupEnd)()
     int (*send)(const cudensitymatDistributedCommunicator_t*, const void*, int32_t, cudaDataType_t, int32_t, int32_t)
     int (*sendAsync)(const cudensitymatDistributedCommunicator_t*, const void*, int32_t, cudaDataType_t, int32_t, int32_t, cudensitymatDistributedRequest_t)
     int (*receive)(const cudensitymatDistributedCommunicator_t*, void*, int32_t, cudaDataType_t, int32_t, int32_t)
@@ -193,6 +198,7 @@ ctypedef struct cudensitymatDistributedInterface_t 'cudensitymatDistributedInter
     int (*allreduceInPlaceMin)(const cudensitymatDistributedCommunicator_t*, void*, int32_t, cudaDataType_t)
     int (*allreduceDoubleIntMinloc)(const cudensitymatDistributedCommunicator_t*, const void*, void*)
     int (*allgather)(const cudensitymatDistributedCommunicator_t*, const void*, void*, int32_t, cudaDataType_t)
+
 ctypedef void (*cudensitymatLoggerCallback_t 'cudensitymatLoggerCallback_t')(
     int32_t logLevel,
     const char* functionName,
@@ -208,20 +214,24 @@ ctypedef struct cudensitymatWrappedScalarCallback_t 'cudensitymatWrappedScalarCa
     cudensitymatScalarCallback_t callback
     cudensitymatCallbackDevice_t device
     void* wrapper
+
 ctypedef struct cudensitymatWrappedTensorCallback_t 'cudensitymatWrappedTensorCallback_t':
     cudensitymatTensorCallback_t callback
     cudensitymatCallbackDevice_t device
     void* wrapper
+
 ctypedef struct cudensitymatWrappedScalarGradientCallback_t 'cudensitymatWrappedScalarGradientCallback_t':
     cudensitymatScalarGradientCallback_t callback
     cudensitymatCallbackDevice_t device
     void* wrapper
     cudensitymatDifferentiationDir_t direction
+
 ctypedef struct cudensitymatWrappedTensorGradientCallback_t 'cudensitymatWrappedTensorGradientCallback_t':
     cudensitymatTensorGradientCallback_t callback
     cudensitymatCallbackDevice_t device
     void* wrapper
-    cudensitymatDifferentiationDir_t direction    
+    cudensitymatDifferentiationDir_t direction
+    
 
 
 ###############################################################################
@@ -264,6 +274,7 @@ cdef cudensitymatStatus_t cudensitymatCreateOperator(const cudensitymatHandle_t 
 cdef cudensitymatStatus_t cudensitymatDestroyOperator(cudensitymatOperator_t superoperator) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil
 cdef cudensitymatStatus_t cudensitymatOperatorAppendTerm(const cudensitymatHandle_t handle, cudensitymatOperator_t superoperator, cudensitymatOperatorTerm_t operatorTerm, int32_t duality, cuDoubleComplex coefficient, cudensitymatWrappedScalarCallback_t coefficientCallback, cudensitymatWrappedScalarGradientCallback_t coefficientGradientCallback) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil
 cdef cudensitymatStatus_t cudensitymatOperatorAppendTermBatch(const cudensitymatHandle_t handle, cudensitymatOperator_t superoperator, cudensitymatOperatorTerm_t operatorTerm, int32_t duality, int64_t batchSize, const cuDoubleComplex staticCoefficients[], cuDoubleComplex totalCoefficients[], cudensitymatWrappedScalarCallback_t coefficientCallback, cudensitymatWrappedScalarGradientCallback_t coefficientGradientCallback) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil
+cdef cudensitymatStatus_t cudensitymatAttachBatchedCoefficients(const cudensitymatHandle_t handle, cudensitymatOperator_t superoperator, int32_t numOperatorTermBatchedCoeffs, void* operatorTermBatchedCoeffsTmp[], void* operatorTermBatchedCoeffs[], int32_t numOperatorProductBatchedCoeffs, void* operatorProductBatchedCoeffsTmp[], void* operatorProductBatchedCoeffs[]) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil
 cdef cudensitymatStatus_t cudensitymatOperatorPrepareAction(const cudensitymatHandle_t handle, cudensitymatOperator_t superoperator, const cudensitymatState_t stateIn, const cudensitymatState_t stateOut, cudensitymatComputeType_t computeType, size_t workspaceSizeLimit, cudensitymatWorkspaceDescriptor_t workspace, cudaStream_t stream) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil
 cdef cudensitymatStatus_t cudensitymatOperatorComputeAction(const cudensitymatHandle_t handle, cudensitymatOperator_t superoperator, double time, int64_t batchSize, int32_t numParams, const double* params, const cudensitymatState_t stateIn, cudensitymatState_t stateOut, cudensitymatWorkspaceDescriptor_t workspace, cudaStream_t stream) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil
 cdef cudensitymatStatus_t cudensitymatOperatorPrepareActionBackwardDiff(const cudensitymatHandle_t handle, cudensitymatOperator_t superoperator, const cudensitymatState_t stateIn, const cudensitymatState_t stateOutAdj, cudensitymatComputeType_t computeType, size_t workspaceSizeLimit, cudensitymatWorkspaceDescriptor_t workspace, cudaStream_t stream) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil
@@ -286,3 +297,5 @@ cdef cudensitymatStatus_t cudensitymatDestroyWorkspace(cudensitymatWorkspaceDesc
 cdef cudensitymatStatus_t cudensitymatWorkspaceGetMemorySize(const cudensitymatHandle_t handle, const cudensitymatWorkspaceDescriptor_t workspaceDescr, cudensitymatMemspace_t memSpace, cudensitymatWorkspaceKind_t workspaceKind, size_t* memoryBufferSize) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil
 cdef cudensitymatStatus_t cudensitymatWorkspaceSetMemory(const cudensitymatHandle_t handle, cudensitymatWorkspaceDescriptor_t workspaceDescr, cudensitymatMemspace_t memSpace, cudensitymatWorkspaceKind_t workspaceKind, void* memoryBuffer, size_t memoryBufferSize) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil
 cdef cudensitymatStatus_t cudensitymatWorkspaceGetMemory(const cudensitymatHandle_t handle, const cudensitymatWorkspaceDescriptor_t workspaceDescr, cudensitymatMemspace_t memSpace, cudensitymatWorkspaceKind_t workspaceKind, void** memoryBuffer, size_t* memoryBufferSize) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil
+cdef cudensitymatStatus_t cudensitymatElementaryOperatorAttachBuffer(const cudensitymatHandle_t handle, cudensitymatElementaryOperator_t elemOperator, void* buffer, size_t bufferSize) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil
+cdef cudensitymatStatus_t cudensitymatMatrixOperatorDenseLocalAttachBuffer(const cudensitymatHandle_t handle, cudensitymatMatrixOperator_t matrixOperator, void* buffer, size_t bufferSize) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil

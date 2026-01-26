@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -188,7 +188,16 @@ class NetworkOperator:
     
 
     @classmethod
-    def from_pauli_strings(cls, pauli_strings, dtype=STATE_DEFAULT_DTYPE, backend="auto", options=None, stream=None):
+    def from_pauli_strings(
+        cls,
+        pauli_strings,
+        *,
+        dtype=STATE_DEFAULT_DTYPE,
+        backend="auto",
+        remove_identity="auto",
+        options=None,
+        stream=None
+    ):
         """
         Generate a tensor network operator object from given pauli strings.
 
@@ -203,6 +212,12 @@ class NetworkOperator:
 
             backend : A string specifying the ndarray backend for the device tensor operands. Currently supports ``'auto'`` (default), ``'numpy'``, ``'cupy'``, and ``'torch'``.
                 If ``'auto'``, ``'cupy'`` is used when it is available, otherwise ``'numpy'`` is used.
+            remove_identity : An optional boolean specifying whether to remove identity Pauli strings.
+                By default, identity operators are removed when there is only one Pauli string.
+                Setting it to ``True`` will optimize computational time for individual term contractions.
+                Each term undergoes separate contraction path finding, which can be faster for per-term computation.
+                Setting it to ``False`` will enable contraction path reuse across all operator terms,
+                which can be more efficient for total computation time when processing multiple terms.
             options : Specify options for the state computation as a :class:`cuquantum.tensornet.NetworkOptions` object. 
                 Alternatively, a `dict` containing the parameters for the ``NetworkOptions`` constructor can also be provided. 
                 If not specified, the value will be set to the default-constructed ``NetworkOptions`` object.
@@ -219,7 +234,11 @@ class NetworkOperator:
             pauli_strings = {pauli_strings: 1}
         if not isinstance(pauli_strings, dict):
             raise ValueError(f"pauli_strings must be either a dictionary mapping pauli strings to its coefficient or a single pauli string")
-
+        
+        assert remove_identity in [True, False, 'auto'], "remove_identity must be either True, False, or 'auto'"
+        if remove_identity == 'auto':
+            remove_identity = len(pauli_strings) == 1
+        
         if dtype.startswith('float'):
             for key in pauli_strings.keys():
                 if 'Y' in key:
@@ -230,7 +249,7 @@ class NetworkOperator:
         operator_obj = cls(state_mode_extents, dtype=dtype, options=options)
         if backend == "auto":
             backend = get_auto_backend_name()
-        operands_data = create_pauli_operands(pauli_strings, backend, dtype, options.device_id, stream=stream)
+        operands_data = create_pauli_operands(pauli_strings, backend, dtype, remove_identity, options.device_id, stream=stream)
         
         for tensors, modes, coefficient in operands_data:
             operator_obj.append_product(coefficient, modes, tensors, stream=stream)

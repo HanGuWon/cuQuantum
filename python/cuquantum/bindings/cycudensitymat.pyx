@@ -1,8 +1,8 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# This code was automatically generated with version 25.09.0. Do not modify it directly.
+# This code was automatically generated with version 26.01.0. Do not modify it directly.
 
 from ._internal cimport cudensitymat as _cudensitymat
 
@@ -155,6 +155,10 @@ cdef cudensitymatStatus_t cudensitymatOperatorAppendTermBatch(const cudensitymat
     return _cudensitymat._cudensitymatOperatorAppendTermBatch(handle, superoperator, operatorTerm, duality, batchSize, staticCoefficients, totalCoefficients, coefficientCallback, coefficientGradientCallback)
 
 
+cdef cudensitymatStatus_t cudensitymatAttachBatchedCoefficients(const cudensitymatHandle_t handle, cudensitymatOperator_t superoperator, int32_t numOperatorTermBatchedCoeffs, void* operatorTermBatchedCoeffsTmp[], void* operatorTermBatchedCoeffs[], int32_t numOperatorProductBatchedCoeffs, void* operatorProductBatchedCoeffsTmp[], void* operatorProductBatchedCoeffs[]) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+    return _cudensitymat._cudensitymatAttachBatchedCoefficients(handle, superoperator, numOperatorTermBatchedCoeffs, operatorTermBatchedCoeffsTmp, operatorTermBatchedCoeffs, numOperatorProductBatchedCoeffs, operatorProductBatchedCoeffsTmp, operatorProductBatchedCoeffs)
+
+
 cdef cudensitymatStatus_t cudensitymatOperatorPrepareAction(const cudensitymatHandle_t handle, cudensitymatOperator_t superoperator, const cudensitymatState_t stateIn, const cudensitymatState_t stateOut, cudensitymatComputeType_t computeType, size_t workspaceSizeLimit, cudensitymatWorkspaceDescriptor_t workspace, cudaStream_t stream) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil:
     return _cudensitymat._cudensitymatOperatorPrepareAction(handle, superoperator, stateIn, stateOut, computeType, workspaceSizeLimit, workspace, stream)
 
@@ -241,3 +245,11 @@ cdef cudensitymatStatus_t cudensitymatWorkspaceSetMemory(const cudensitymatHandl
 
 cdef cudensitymatStatus_t cudensitymatWorkspaceGetMemory(const cudensitymatHandle_t handle, const cudensitymatWorkspaceDescriptor_t workspaceDescr, cudensitymatMemspace_t memSpace, cudensitymatWorkspaceKind_t workspaceKind, void** memoryBuffer, size_t* memoryBufferSize) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil:
     return _cudensitymat._cudensitymatWorkspaceGetMemory(handle, workspaceDescr, memSpace, workspaceKind, memoryBuffer, memoryBufferSize)
+
+
+cdef cudensitymatStatus_t cudensitymatElementaryOperatorAttachBuffer(const cudensitymatHandle_t handle, cudensitymatElementaryOperator_t elemOperator, void* buffer, size_t bufferSize) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+    return _cudensitymat._cudensitymatElementaryOperatorAttachBuffer(handle, elemOperator, buffer, bufferSize)
+
+
+cdef cudensitymatStatus_t cudensitymatMatrixOperatorDenseLocalAttachBuffer(const cudensitymatHandle_t handle, cudensitymatMatrixOperator_t matrixOperator, void* buffer, size_t bufferSize) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+    return _cudensitymat._cudensitymatMatrixOperatorDenseLocalAttachBuffer(handle, matrixOperator, buffer, bufferSize)

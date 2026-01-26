@@ -1,8 +1,8 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# This code was automatically generated with version 25.09.0. Do not modify it directly.
+# This code was automatically generated with version 26.01.0. Do not modify it directly.
 
 from libc.stdint cimport intptr_t
 
@@ -73,6 +73,7 @@ cdef void* __cudensitymatCreateOperator = NULL
 cdef void* __cudensitymatDestroyOperator = NULL
 cdef void* __cudensitymatOperatorAppendTerm = NULL
 cdef void* __cudensitymatOperatorAppendTermBatch = NULL
+cdef void* __cudensitymatAttachBatchedCoefficients = NULL
 cdef void* __cudensitymatOperatorPrepareAction = NULL
 cdef void* __cudensitymatOperatorComputeAction = NULL
 cdef void* __cudensitymatOperatorPrepareActionBackwardDiff = NULL
@@ -95,6 +96,8 @@ cdef void* __cudensitymatDestroyWorkspace = NULL
 cdef void* __cudensitymatWorkspaceGetMemorySize = NULL
 cdef void* __cudensitymatWorkspaceSetMemory = NULL
 cdef void* __cudensitymatWorkspaceGetMemory = NULL
+cdef void* __cudensitymatElementaryOperatorAttachBuffer = NULL
+cdef void* __cudensitymatMatrixOperatorDenseLocalAttachBuffer = NULL
 
 
 cdef void* load_library() except* nogil:
@@ -115,6 +118,10 @@ cdef int _check_or_init_cudensitymat() except -1 nogil:
     cdef void* handle = NULL
 
     with gil, __symbol_lock:
+        # Recheck the flag after obtaining the locks
+        if __py_cudensitymat_init:
+            return 0
+            
         # Load function
         global __cudensitymatGetVersion
         __cudensitymatGetVersion = dlsym(RTLD_DEFAULT, 'cudensitymatGetVersion')
@@ -368,6 +375,13 @@ cdef int _check_or_init_cudensitymat() except -1 nogil:
                 handle = load_library()
             __cudensitymatOperatorAppendTermBatch = dlsym(handle, 'cudensitymatOperatorAppendTermBatch')
 
+        global __cudensitymatAttachBatchedCoefficients
+        __cudensitymatAttachBatchedCoefficients = dlsym(RTLD_DEFAULT, 'cudensitymatAttachBatchedCoefficients')
+        if __cudensitymatAttachBatchedCoefficients == NULL:
+            if handle == NULL:
+                handle = load_library()
+            __cudensitymatAttachBatchedCoefficients = dlsym(handle, 'cudensitymatAttachBatchedCoefficients')
+
         global __cudensitymatOperatorPrepareAction
         __cudensitymatOperatorPrepareAction = dlsym(RTLD_DEFAULT, 'cudensitymatOperatorPrepareAction')
         if __cudensitymatOperatorPrepareAction == NULL:
@@ -521,6 +535,20 @@ cdef int _check_or_init_cudensitymat() except -1 nogil:
             if handle == NULL:
                 handle = load_library()
             __cudensitymatWorkspaceGetMemory = dlsym(handle, 'cudensitymatWorkspaceGetMemory')
+
+        global __cudensitymatElementaryOperatorAttachBuffer
+        __cudensitymatElementaryOperatorAttachBuffer = dlsym(RTLD_DEFAULT, 'cudensitymatElementaryOperatorAttachBuffer')
+        if __cudensitymatElementaryOperatorAttachBuffer == NULL:
+            if handle == NULL:
+                handle = load_library()
+            __cudensitymatElementaryOperatorAttachBuffer = dlsym(handle, 'cudensitymatElementaryOperatorAttachBuffer')
+
+        global __cudensitymatMatrixOperatorDenseLocalAttachBuffer
+        __cudensitymatMatrixOperatorDenseLocalAttachBuffer = dlsym(RTLD_DEFAULT, 'cudensitymatMatrixOperatorDenseLocalAttachBuffer')
+        if __cudensitymatMatrixOperatorDenseLocalAttachBuffer == NULL:
+            if handle == NULL:
+                handle = load_library()
+            __cudensitymatMatrixOperatorDenseLocalAttachBuffer = dlsym(handle, 'cudensitymatMatrixOperatorDenseLocalAttachBuffer')
         __py_cudensitymat_init = True
         return 0
 
@@ -637,6 +665,9 @@ cpdef dict _inspect_function_pointers():
     global __cudensitymatOperatorAppendTermBatch
     data["__cudensitymatOperatorAppendTermBatch"] = <intptr_t>__cudensitymatOperatorAppendTermBatch
 
+    global __cudensitymatAttachBatchedCoefficients
+    data["__cudensitymatAttachBatchedCoefficients"] = <intptr_t>__cudensitymatAttachBatchedCoefficients
+
     global __cudensitymatOperatorPrepareAction
     data["__cudensitymatOperatorPrepareAction"] = <intptr_t>__cudensitymatOperatorPrepareAction
 
@@ -702,6 +733,12 @@ cpdef dict _inspect_function_pointers():
 
     global __cudensitymatWorkspaceGetMemory
     data["__cudensitymatWorkspaceGetMemory"] = <intptr_t>__cudensitymatWorkspaceGetMemory
+
+    global __cudensitymatElementaryOperatorAttachBuffer
+    data["__cudensitymatElementaryOperatorAttachBuffer"] = <intptr_t>__cudensitymatElementaryOperatorAttachBuffer
+
+    global __cudensitymatMatrixOperatorDenseLocalAttachBuffer
+    data["__cudensitymatMatrixOperatorDenseLocalAttachBuffer"] = <intptr_t>__cudensitymatMatrixOperatorDenseLocalAttachBuffer
 
     return data
 
@@ -1070,6 +1107,16 @@ cdef cudensitymatStatus_t _cudensitymatOperatorAppendTermBatch(const cudensityma
         handle, superoperator, operatorTerm, duality, batchSize, staticCoefficients, totalCoefficients, coefficientCallback, coefficientGradientCallback)
 
 
+cdef cudensitymatStatus_t _cudensitymatAttachBatchedCoefficients(const cudensitymatHandle_t handle, cudensitymatOperator_t superoperator, int32_t numOperatorTermBatchedCoeffs, void* operatorTermBatchedCoeffsTmp[], void* operatorTermBatchedCoeffs[], int32_t numOperatorProductBatchedCoeffs, void* operatorProductBatchedCoeffsTmp[], void* operatorProductBatchedCoeffs[]) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+    global __cudensitymatAttachBatchedCoefficients
+    _check_or_init_cudensitymat()
+    if __cudensitymatAttachBatchedCoefficients == NULL:
+        with gil:
+            raise FunctionNotFoundError("function cudensitymatAttachBatchedCoefficients is not found")
+    return (<cudensitymatStatus_t (*)(const cudensitymatHandle_t, cudensitymatOperator_t, int32_t, void**, void**, int32_t, void**, void**) noexcept nogil>__cudensitymatAttachBatchedCoefficients)(
+        handle, superoperator, numOperatorTermBatchedCoeffs, operatorTermBatchedCoeffsTmp, operatorTermBatchedCoeffs, numOperatorProductBatchedCoeffs, operatorProductBatchedCoeffsTmp, operatorProductBatchedCoeffs)
+
+
 cdef cudensitymatStatus_t _cudensitymatOperatorPrepareAction(const cudensitymatHandle_t handle, cudensitymatOperator_t superoperator, const cudensitymatState_t stateIn, const cudensitymatState_t stateOut, cudensitymatComputeType_t computeType, size_t workspaceSizeLimit, cudensitymatWorkspaceDescriptor_t workspace, cudaStream_t stream) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil:
     global __cudensitymatOperatorPrepareAction
     _check_or_init_cudensitymat()
@@ -1288,3 +1335,23 @@ cdef cudensitymatStatus_t _cudensitymatWorkspaceGetMemory(const cudensitymatHand
             raise FunctionNotFoundError("function cudensitymatWorkspaceGetMemory is not found")
     return (<cudensitymatStatus_t (*)(const cudensitymatHandle_t, const cudensitymatWorkspaceDescriptor_t, cudensitymatMemspace_t, cudensitymatWorkspaceKind_t, void**, size_t*) noexcept nogil>__cudensitymatWorkspaceGetMemory)(
         handle, workspaceDescr, memSpace, workspaceKind, memoryBuffer, memoryBufferSize)
+
+
+cdef cudensitymatStatus_t _cudensitymatElementaryOperatorAttachBuffer(const cudensitymatHandle_t handle, cudensitymatElementaryOperator_t elemOperator, void* buffer, size_t bufferSize) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+    global __cudensitymatElementaryOperatorAttachBuffer
+    _check_or_init_cudensitymat()
+    if __cudensitymatElementaryOperatorAttachBuffer == NULL:
+        with gil:
+            raise FunctionNotFoundError("function cudensitymatElementaryOperatorAttachBuffer is not found")
+    return (<cudensitymatStatus_t (*)(const cudensitymatHandle_t, cudensitymatElementaryOperator_t, void*, size_t) noexcept nogil>__cudensitymatElementaryOperatorAttachBuffer)(
+        handle, elemOperator, buffer, bufferSize)
+
+
+cdef cudensitymatStatus_t _cudensitymatMatrixOperatorDenseLocalAttachBuffer(const cudensitymatHandle_t handle, cudensitymatMatrixOperator_t matrixOperator, void* buffer, size_t bufferSize) except?_CUDENSITYMATSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+    global __cudensitymatMatrixOperatorDenseLocalAttachBuffer
+    _check_or_init_cudensitymat()
+    if __cudensitymatMatrixOperatorDenseLocalAttachBuffer == NULL:
+        with gil:
+            raise FunctionNotFoundError("function cudensitymatMatrixOperatorDenseLocalAttachBuffer is not found")
+    return (<cudensitymatStatus_t (*)(const cudensitymatHandle_t, cudensitymatMatrixOperator_t, void*, size_t) noexcept nogil>__cudensitymatMatrixOperatorDenseLocalAttachBuffer)(
+        handle, matrixOperator, buffer, bufferSize)

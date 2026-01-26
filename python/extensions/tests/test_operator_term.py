@@ -1,22 +1,19 @@
-# Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
-Test the cuDensityMat API for JAX.
+Test the OperatorTerm class in cuQuantum Python JAX.
 """
 
 import pytest
-
-from itertools import product
-
 import jax
 import jax.numpy as jnp
 
 jax.config.update("jax_enable_x64", True)
 
 from cuquantum.bindings import cudensitymat as cudm
-from cuquantum.densitymat.jax import ElementaryOperator, MatrixOperator, OperatorTerm, Operator
+from cuquantum.densitymat.jax import ElementaryOperator, MatrixOperator, OperatorTerm
 
 
 key = jax.random.key(0)
@@ -42,229 +39,6 @@ def data(request):
 
 
 data_ = data
-
-
-class TestElementaryOperator:
-    """
-    Test the cuDensityMat ElementaryOperator class.
-    """
-
-    @pytest.mark.parametrize(
-        "data",
-        list(product(
-            [(4, 4), (3, 5, 3, 5)],
-            [jnp.float32, jnp.float64, jnp.complex64, jnp.complex128],
-        )),
-        indirect=True,
-    )
-    def test_init_dense(self, data):
-        """
-        Test initializing dense elementary operator.
-        """
-        elem_op = ElementaryOperator(data)
-
-        assert elem_op.num_modes == len(data.shape) // 2
-        assert elem_op.mode_extents == data.shape[:len(data.shape) // 2]
-        assert elem_op.data.shape == data.shape
-        assert elem_op.sparsity == cudm.ElementaryOperatorSparsity.OPERATOR_SPARSITY_NONE
-
-    @pytest.mark.parametrize(
-        "data",
-        [
-            ((3, 5, 3), jnp.complex128),
-            ((3, 5, 3, 4), jnp.complex128),
-        ],
-        indirect=True,
-    )
-    def test_init_dense_fail(self, data):
-        """
-        Test initializing dense elementary operator with invalid data.
-        """
-        with pytest.raises(ValueError):
-            ElementaryOperator(data)
-
-    @pytest.mark.parametrize(
-        "data",
-        list(product(
-            [(4, 2)],
-            [jnp.float32, jnp.float64, jnp.complex64, jnp.complex128],
-        )),
-        indirect=True,
-    )
-    @pytest.mark.parametrize("offsets", [(0, 1)])
-    def test_init_multidiagonal(self, data, offsets):
-        """ 
-        Test initializing multidiagonal elementary operator.
-        """
-        elem_op = ElementaryOperator(data, offsets=offsets)
-        assert elem_op.num_modes == len(data.shape) // 2
-        assert elem_op.mode_extents == data.shape[:len(data.shape) // 2]
-        assert elem_op.data.shape == data.shape
-        assert elem_op.sparsity == cudm.ElementaryOperatorSparsity.OPERATOR_SPARSITY_MULTIDIAGONAL
-        assert elem_op.offsets == (0, 1)
-
-    @pytest.mark.parametrize(
-        "data,offsets",
-        [
-            (((3, 5, 3, 5), jnp.complex128), (0, 1)),
-            (((4, 3), jnp.complex128), (0, 1)),
-            (((4, 3), jnp.complex128), (0, 1, 0)),
-        ],
-        indirect=["data"],
-    )
-    def test_init_multidiagonal_fail(self, data, offsets):
-        """
-        Test initializing multidiagonal elementary operator with invalid offsets.
-        """
-        with pytest.raises(ValueError):
-            ElementaryOperator(data, offsets=offsets)
-
-    @pytest.mark.parametrize(
-        "data",
-        list(product(
-            [(4, 4), (3, 5, 3, 5)],
-            [jnp.float32, jnp.float64, jnp.complex64, jnp.complex128],
-        )),
-        indirect=True,
-    )
-    def test_create(self, data, handle):
-        """
-        Test elementary operator opaque handle creation.
-        """
-        elem_op = ElementaryOperator(data)
-
-        # Test that _ptr is None before _create.
-        assert elem_op._ptr is None
-
-        # Test that _create sets the pointer.
-        elem_op._create(handle)
-        assert elem_op._ptr is not None
-
-        # Test that calling _create again won't overwrite the pointer.
-        ptr = elem_op._ptr
-        elem_op._create(handle)
-        assert elem_op._ptr == ptr
-
-        elem_op._destroy()
-
-    @pytest.mark.parametrize(
-        "data",
-        list(product(
-            [(4, 4), (3, 5, 3, 5)],
-            [jnp.float32, jnp.float64, jnp.complex64, jnp.complex128],
-        )),
-        indirect=True,
-    )
-    def test_destroy(self, data, handle):
-        """
-        Test elementary operator opaque handle destruction.
-        """
-        elem_op = ElementaryOperator(data)
-
-        # Test that _create sets the pointer.
-        elem_op._create(handle)
-        assert elem_op._ptr is not None
-
-        # Test that _destroy sets the pointer to None.
-        elem_op._destroy()
-        assert elem_op._ptr is None
-
-        # Test that calling _destroy again has no effect.
-        elem_op._destroy()
-        assert elem_op._ptr is None
-
-
-class TestMatrixOperator:
-    """
-    Test the cuDensityMat MatrixOperator class.
-    """
-
-    @pytest.mark.parametrize(
-        "data",
-        list(product(
-            [(4, 4), (3, 5, 3, 5)],
-            [jnp.float32, jnp.float64, jnp.complex64, jnp.complex128],
-        )),
-        indirect=True,
-    )
-    def test_init_dense(self, data):
-        """
-        Test initializing dense matrix operator.
-        """
-        elem_op = MatrixOperator(data)
-
-        assert elem_op.num_modes == len(data.shape) // 2
-        assert elem_op.mode_extents == data.shape[:len(data.shape) // 2]
-        assert elem_op.data.shape == data.shape
-
-    @pytest.mark.parametrize(
-        "data",
-        [
-            ((3, 5, 3), jnp.complex128),
-            ((3, 5, 3, 4), jnp.complex128),
-        ],
-        indirect=True,
-    )
-    def test_init_dense_fail(self, data):
-        """
-        Test initializing dense matrix operator with invalid data.
-        """
-        with pytest.raises(ValueError):
-            MatrixOperator(data)
-
-    @pytest.mark.parametrize(
-        "data",
-        list(product(
-            [(4, 4), (3, 5, 3, 5)],
-            [jnp.float32, jnp.float64, jnp.complex64, jnp.complex128],
-        )),
-        indirect=True,
-    )
-    def test_create(self, data, handle):
-        """
-        Test matrix operator opaque handle creation.
-        """
-        elem_op = MatrixOperator(data)
-
-        # Test that _ptr is None before _create.
-        assert elem_op._ptr is None
-
-        # Test that _create sets the pointer.
-        elem_op._create(handle)
-        assert elem_op._ptr is not None
-
-        # Test that calling _create again won't overwrite the pointer.
-        ptr = elem_op._ptr
-        elem_op._create(handle)
-        assert elem_op._ptr == ptr
-
-        elem_op._destroy()
-
-    @pytest.mark.parametrize(
-        "data",
-        list(product(
-            [(4, 4), (3, 5, 3, 5)],
-            [jnp.float32, jnp.float64, jnp.complex64, jnp.complex128],
-        )),
-        indirect=True,
-    )
-    def test_destroy(self, data, handle):
-        """
-        Test matrix operator opaque handle creation.
-        """
-        elem_op = MatrixOperator(data)
-
-        # Test that _create sets the pointer.
-        elem_op._create(handle)
-        assert elem_op._ptr is not None
-
-        # Test that _destroy sets the pointer to None.
-        elem_op._destroy()
-        assert elem_op._ptr is None
-
-        # Test that calling _destroy again has no effect.
-        elem_op._destroy()
-        assert elem_op._ptr is None
 
 
 class TestOperatorTerm:
@@ -689,6 +463,23 @@ class TestOperatorTerm:
         ],
         indirect=True,
     )
+    def test_append_fail_coeff_callback_without_total_coeffs(self, data):
+        """
+        Test appending operator products with a coefficient callback without total coefficients fails.
+        """
+        base_op = ElementaryOperator(data)
+        op_term = OperatorTerm(self.dims)
+        static_coeffs = jnp.array([1.0])
+        with pytest.raises(RuntimeError):
+            op_term.append([base_op], static_coeffs=static_coeffs, coeff_callback=lambda x: x)
+
+    @pytest.mark.parametrize(
+        "data",
+        [
+            ((3, 3), jnp.complex128),
+        ],
+        indirect=True,
+    )
     @pytest.mark.parametrize(
         "data_",
         [
@@ -848,224 +639,6 @@ class TestOperatorTerm:
         assert op_term._ptr is None
         for base_op in op_term.op_prods[0]:
             assert base_op._ptr is not None
-        op_term2._destroy()
-        base_op1._destroy()
-        base_op2._destroy()
-
-
-class TestOperator:
-    """
-    Test the cuDensityMat Operator class.
-    """
-
-    dims = (3, 4, 5)
-
-    @pytest.mark.parametrize(
-        "data",
-        [
-            ((3, 3), jnp.complex128),
-        ],
-        indirect=True,
-    )
-    @pytest.mark.parametrize(
-        "data_",
-        [
-            ((4, 4), jnp.complex64),
-        ],
-        indirect=True,
-    )
-    def test_append_fail_mixed_dtypes(self, data, data_):
-        """
-        Test appending operator products of different dtypes fails.
-        """
-        base_op1 = ElementaryOperator(data)
-        base_op2 = ElementaryOperator(data_)
-        
-        op_term1 = OperatorTerm(self.dims)
-        op_term2 = OperatorTerm(self.dims)
-
-        op_term1.append([base_op1], modes=(0,))
-        op_term2.append([base_op2], modes=(1,))
-
-        op = Operator(self.dims)
-        with pytest.raises(ValueError):
-            op.append(op_term1)
-            op.append(op_term2)
-
-    @pytest.mark.parametrize(
-        "data",
-        [
-            ((3, 3), jnp.complex128),
-        ],
-        indirect=True,
-    )
-    @pytest.mark.parametrize(
-        "data_",
-        [
-            ((4, 4), jnp.complex128),
-        ],
-        indirect=True,
-    )
-    def test_create_elementary(self, data, data_, handle):
-        """
-        Test operator opaque handle creation.
-        """
-        base_op1 = ElementaryOperator(data)
-        base_op2 = ElementaryOperator(data_)
-
-        op_term = OperatorTerm(self.dims)
-        op_term.append([base_op1, base_op2], modes=(0, 1))
-
-        op = Operator(self.dims)
-        op.append(op_term)
-
-        op._create(handle)
-        assert op._ptr is not None
-
-        for op_term in op.op_terms:
-            assert op_term._ptr is not None
-            for base_op in op_term.op_prods[0]:
-                assert base_op._ptr is not None
-
-        op._destroy()
-        op_term._destroy()
-        base_op1._destroy()
-        base_op2._destroy()
-
-    @pytest.mark.parametrize(
-        "data",
-        [
-            ((3, 4, 5, 3, 4, 5), jnp.complex128),
-        ],
-        indirect=True,
-    )
-    @pytest.mark.parametrize(
-        "data_",
-        [
-            ((3, 4, 5, 3, 4, 5), jnp.complex128),
-        ],
-        indirect=True,
-    )
-    def test_create_matrix(self, data, data_, handle):
-        """
-        Test operator opaque handle creation.
-        """
-        base_op1 = MatrixOperator(data)
-        base_op2 = MatrixOperator(data_)
-
-        op_term = OperatorTerm(self.dims)
-        op_term.append([base_op1, base_op2])
-
-        op = Operator(self.dims)
-        op.append(op_term)
-
-        op._create(handle)
-        assert op._ptr is not None
-
-        for op_term in op.op_terms:
-            assert op_term._ptr is not None
-            for base_op in op_term.op_prods[0]:
-                assert base_op._ptr is not None
-
-        op._destroy()
-        op_term._destroy()
-        base_op1._destroy()
-        base_op2._destroy()
-
-    @pytest.mark.parametrize(
-        "data",
-        [
-            ((3, 3), jnp.complex128),
-        ],
-        indirect=True,
-    )
-    @pytest.mark.parametrize(
-        "data_",
-        [
-            ((4, 4), jnp.complex128),
-        ],
-        indirect=True,
-    )
-    def test_destroy_elementary(self, data, data_, handle):
-        """
-        Test operator opaque handle destruction.
-        """
-        base_op1 = ElementaryOperator(data)
-        base_op2 = ElementaryOperator(data_)
-
-        op_term = OperatorTerm(self.dims)
-        op_term.append([base_op1, base_op2], modes=(0, 1))
-        op_term.append([base_op1,], modes=(0,))
-        op_term2 = OperatorTerm(self.dims)
-        op_term2.append([base_op2,], modes=(1,))
-
-        op = Operator(self.dims)
-        op2 = Operator(self.dims)
-        op.append(op_term)
-        op2.append(op_term)
-        op2.append(op_term2)
-
-        op._create(handle)
-        op2._create(handle)
-
-        op._destroy()
-        assert op._ptr is None
-        for op_term in op.op_terms:
-            assert op_term._ptr is not None
-            for base_op in op_term.op_prods[0]:
-                assert base_op._ptr is not None
-        op2._destroy()
-        op_term._destroy()
-        op_term2._destroy()
-        base_op1._destroy()
-        base_op2._destroy()
-
-    @pytest.mark.parametrize(
-        "data",
-        [
-            ((3, 4, 5, 3, 4, 5), jnp.complex128),
-        ],
-        indirect=True,
-    )
-    @pytest.mark.parametrize(
-        "data_",
-        [
-            ((3, 4, 5, 3, 4, 5), jnp.complex128),
-        ],
-        indirect=True,
-    )
-    def test_destroy_matrix(self, data, data_, handle):
-        """
-        Test operator opaque handle destruction.
-        """
-        base_op1 = MatrixOperator(data)
-        base_op2 = MatrixOperator(data_)
-
-        op_term = OperatorTerm(self.dims)
-        op_term.append([base_op1, base_op2])
-
-        op_term2 = OperatorTerm(self.dims)
-        op_term2.append([base_op1,],)
-        op_term2.append([base_op2,],)
-        
-
-        op = Operator(self.dims)
-        op2 = Operator(self.dims)
-        op.append(op_term)
-        op2.append(op_term2)
-        op2.append(op_term)
-
-        op._create(handle)
-        op2._create(handle)
-
-        op._destroy()
-        assert op._ptr is None
-        for op_term in op.op_terms:
-            assert op_term._ptr is not None
-            for base_op in op_term.op_prods[0]:
-                assert base_op._ptr is not None
-        op2._destroy()
-        op_term._destroy()
         op_term2._destroy()
         base_op1._destroy()
         base_op2._destroy()

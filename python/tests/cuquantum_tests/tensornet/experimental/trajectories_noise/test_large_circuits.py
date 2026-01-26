@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -57,17 +57,10 @@ def test_bitflip_maxcut_cost(trajectory_sim, bitflip_p, n_qubits, channel_method
             # -- Apply noise on the gate
             for q in (u, v):
                 sim.apply_channel((q,), channel)
-        # -- Calculate expectation
-        exp = sim.expectation(cost_dict)
-        ensemble_exps.append(exp)
         # -- Calculate DM
         dm = sim.rdm()
         ensemble_dms.append(dm)
 
-    print(f"{ensemble_exps}")
-    avg_cost = G.number_of_edges() / 2 - np.mean(ensemble_exps)
-    print(f"{avg_cost=}")
-    print(f"{init_cut_value=}")
     ensemble_dm = np.stack(ensemble_dms).mean(axis=0).reshape(2**n_qubits, 2**n_qubits)
 
     # -- Reference values

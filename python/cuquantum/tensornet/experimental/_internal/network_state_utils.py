@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 import functools
@@ -197,7 +197,8 @@ def get_pauli_map(backend, dtype, device_id=None, stream=None):
         pauli_map['Y'] = asarray([[0,-1j], [1j,0]], dtype=dtype)
     return pauli_map
 
-def create_pauli_operands(pauli_strings, backend, dtype, device_id=None, stream=None):
+def create_pauli_operands(pauli_strings, backend, dtype, remove_identity, device_id=None, stream=None):
+    assert isinstance(remove_identity, bool), "INTERNAL ERROR: remove_identity must be a boolean"
     pauli_map = get_pauli_map(backend, dtype, device_id=device_id, stream=stream)
     operands_data = []
     n_qubits = None
@@ -209,7 +210,7 @@ def create_pauli_operands(pauli_strings, backend, dtype, device_id=None, stream=
         tensors = []
         modes = []
         for q, pauli_char in enumerate(pauli_string):
-            if pauli_char == 'I': continue
+            if pauli_char == 'I' and remove_identity: continue
             tensors.append(pauli_map[pauli_char])
             modes.append((q, ))
         if len(tensors) == 0:

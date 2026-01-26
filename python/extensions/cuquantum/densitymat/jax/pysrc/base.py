@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -11,7 +11,7 @@ from functools import partial
 
 import jax
 from jax.extend import core
-from jax.interpreters import xla, mlir
+from jax.interpreters import xla, mlir, batching
 from jax._src import dispatch
 
 from cuquantum.lib import cudensitymat_jax
@@ -55,6 +55,14 @@ class BasePrimitive(metaclass=ABCMeta):
         """
         return NotImplemented
 
+    @staticmethod
+    @abstractmethod
+    def batcher():
+        """
+        Batching rule of the primitive.
+        """
+        return NotImplemented
+
 
 def register_primitive(cls):
     """
@@ -82,6 +90,7 @@ def register_primitive(cls):
         mlir.lower_fun(cls.impl, multiple_results=cls.outer_multiple_results),
         platform="cuda"
     )
+    batching.primitive_batchers[outer_p] = cls.batcher
     cls.outer_primitive = outer_p
 
 

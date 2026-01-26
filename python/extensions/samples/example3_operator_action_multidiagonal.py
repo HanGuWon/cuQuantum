@@ -1,9 +1,6 @@
-# Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
-
-import sys
-import logging
 
 import jax
 import jax.numpy as jnp
@@ -39,9 +36,9 @@ def main():
     jax.debug.print("Defined elementary operator data buffers.")
 
     # Create elementary operators from the data arrays.
-    n_elem_op = ElementaryOperator(n_data_dia, offsets=[0])
-    a_elem_op = ElementaryOperator(a_data_dia, offsets=[1])
-    ad_elem_op = ElementaryOperator(ad_data_dia, offsets=[-1])
+    n_elem_op = ElementaryOperator(n_data_dia, diag_offsets=[0])
+    a_elem_op = ElementaryOperator(a_data_dia, diag_offsets=[1])
+    ad_elem_op = ElementaryOperator(ad_data_dia, diag_offsets=[-1])
     jax.debug.print("Created elementary operator objects.")
 
     # Create the Hamiltonian and dissipators.

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -7,6 +7,10 @@ import importlib
 import numpy as np
 from qiskit import QuantumCircuit
 from qiskit.circuit import Barrier, ControlledGate, Delay, Gate, Measure
+try:
+    from qiskit.circuit import AnnotatedOperation
+except ImportError:
+    AnnotatedOperation = None  # older Qiskit versions don't have this
 from qiskit.circuit.library import (
     UnitaryGate, ZGate, SGate, SdgGate, TGate, 
     TdgGate, PhaseGate, RZGate, CZGate, CCZGate, RZZGate,
@@ -113,6 +117,11 @@ def parse_gate_sequence(
             continue
         if isinstance(operation, NOISY_CHANNEL_TYPES):
             raise RuntimeError("CircuitToEinsum currently doesn't support qiskit Circuits with QuantumChannels")
+        if AnnotatedOperation is not None and isinstance(operation, AnnotatedOperation):
+            raise ValueError(
+                f"AnnotatedOperation '{operation.name}' is not supported. "
+                "Please switch to gates without annotation."
+            )
         if asarray is None:
             gates.append((operation, gate_qubits))
             continue

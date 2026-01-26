@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -84,7 +84,10 @@ def create_vqc_states(config, backend, *, with_control=False):
     else:
         op_two_body_x = random_complex((2, 2, 2, 2))
         op_two_body_y = random_complex((2, 2, 2, 2))
-
+    
+    op_two_body_diagonal_x = random_complex((2, 2,))
+    op_two_body_diagonal_y = random_complex((2, 2,))
+    
     state_a = NetworkState(state_mode_extents, dtype=dtype, config=config)
     state_b = NetworkState(state_mode_extents, dtype=dtype, config=config)
 
@@ -97,6 +100,12 @@ def create_vqc_states(config, backend, *, with_control=False):
         assert tensor_id_a == tensor_id_b
 
     two_body_op_ids = []
+    #  The first gate is diagonal gate
+    tensor_id_a = state_a.apply_tensor_operator((0, 1), op_two_body_diagonal_x, diagonal=True, immutable=False, unitary=False)
+    tensor_id_b = state_b.apply_tensor_operator((0, 1), op_two_body_diagonal_y, diagonal=True, immutable=False, unitary=False)
+    assert tensor_id_a == tensor_id_b
+    two_body_op_ids.append(tensor_id_a)
+    
     # apply two body tensor operators to the tensor network state
     for i in range(0, n_state_modes, 2):
         if with_control:
@@ -110,11 +119,18 @@ def create_vqc_states(config, backend, *, with_control=False):
         tensor_id_b = state_b.apply_tensor_operator(target_mode, op_two_body_y, control_modes=control_mode, control_values=0, immutable=False)
         assert tensor_id_a == tensor_id_b
         two_body_op_ids.append(tensor_id_a)
+        if i == 2:
+            #  The fourth gate is diagonal gate
+            tensor_id_a = state_a.apply_tensor_operator((0, 5), op_two_body_diagonal_x, diagonal=True, immutable=False, unitary=False)
+            tensor_id_b = state_b.apply_tensor_operator((0, 5), op_two_body_diagonal_y, diagonal=True, immutable=False, unitary=False)
+            assert tensor_id_a == tensor_id_b
+            two_body_op_ids.append(tensor_id_a)
+
     
     pauli_string = {'IXIXIX': 0.5, 'IYIYIY': 0.2, 'IZIZIZ': 0.3, 'IIIIII': 0.1, 'ZIZIZI': 0.4, 'XIXIXI': 0.2}
     operator = NetworkOperator.from_pauli_strings(pauli_string, dtype='complex128', backend=backend)
 
-    return (state_a, op_two_body_x), (state_b, op_two_body_y), operator, two_body_op_ids
+    return (state_a, op_two_body_x, op_two_body_diagonal_x), (state_b, op_two_body_y, op_two_body_diagonal_y), operator, two_body_op_ids
 
 def apply_factory_sequence(network_state, sequence):
     tensor_ids = []
@@ -127,7 +143,9 @@ def apply_factory_sequence(network_state, sequence):
                 # GATE
                 tensor_id = network_state.apply_tensor_operator(modes, op)
         else:
-            if 'probabilities' in gate_info:
+            if 'diagonal_gate' in gate_info:
+                tensor_id = network_state.apply_tensor_operator(modes, op, diagonal=True, unitary=False)
+            elif 'probabilities' in gate_info:
                 is_unitary_channel = gate_info['probabilities'] is not None
                 if is_unitary_channel:
                     tensor_id = network_state.apply_unitary_tensor_channel(modes, op, gate_info['probabilities'])
@@ -174,9 +192,9 @@ class StateFactory:
         dims = set(self.state_dims)
         if len(dims) == 1 and dims.pop() == 2:
             # unitary/general channel only supported for qubits
-            assert set(layers).issubset(set('SDCMuUgG'))
+            assert set(layers).issubset(set('SDCMAuUgG'))
         else:
-            assert set(layers).issubset(set('SDCM'))
+            assert set(layers).issubset(set('SDCMA'))
         self.layers = layers
 
         self.rng = rng
@@ -244,6 +262,8 @@ class StateFactory:
                 self._append_unitary_channel_layer(dense=layer=='U')
             elif layer.upper() == 'G':
                 self._append_general_channel_layer(dense=layer=='G')
+            elif layer.upper() == 'A':
+                self._append_diagonal_qudit_layer()
             else:
                 raise ValueError(f"layer type {layer} not supported")
     
@@ -353,6 +373,38 @@ class StateFactory:
             t /= self.backend.norm(t)
             self._sequence.append((t, (i, j), None))
     
+    def _create_unitary_diagonal_gate(self, shape):
+        if 'complex' in self.dtype:
+            # Random phase between 0 and 2*pi
+            phases = self.rng.uniform(0, 2 * np.pi, shape)
+            phases = self.backend.asarray(phases, dtype=self.dtype)
+            diagonal = self.backend.exp(1j * phases)
+        else:  # Real dtype
+            # ±1, randomly assigned
+            signs = self.rng.choice([-1, 1], size=shape)
+            diagonal = self.backend.asarray(signs, dtype=self.dtype)
+        return diagonal
+        
+    def _append_diagonal_qudit_layer(self):
+        # Add single-qudit diagonal gates
+        for i in range(0, self.num_qudits, 2):
+            shape = (self.state_dims[i],)
+            diagonal = self._create_unitary_diagonal_gate(shape)
+            self._sequence.append((diagonal, (i,), {'diagonal_gate': True}))
+
+        # Add double-qudit diagonal gates (adjacent or non-adjacent based on setting)
+        if self.adjacent_double_layer:
+            for i in range(0, self.num_qudits - 1, 2):
+                shape = (self.state_dims[i], self.state_dims[i + 1])
+                diagonal = self._create_unitary_diagonal_gate(shape)
+                self._sequence.append((diagonal, (i, i + 1), {'diagonal_gate': True}))
+        else:
+            for i in range(0, self.num_qudits - 3, 2):
+                j = self.rng.integers(i + 2, self.num_qudits)
+                shape = (self.state_dims[i], self.state_dims[j])
+                diagonal = self._create_unitary_diagonal_gate(shape)
+                self._sequence.append((diagonal, (i, j), {'diagonal_gate': True}))
+
     def _append_mpo_layer(self):
         if self.mpo_geometry == "adjacent-ordered":
             start_site = self.rng.integers(0, self.num_qudits-self.mpo_num_sites+1)
@@ -615,7 +667,6 @@ class StateFactory:
 
         return tensors
 
-
     def get_sv_contraction_expression(self):
         operands = []
         # initial qudit mode
@@ -648,10 +699,15 @@ class StateFactory:
                     qudits = qudits + ctrl_modes
                     qudits = sorted(qudits)
                     gate_info = None
+                elif 'diagonal_gate' in gate_info:
+                    pass
                 else:
                     raise RuntimeError("Not the expected code path")
             n_qudits = len(qudits)
-            if isinstance(op, (list, tuple)):
+            if gate_info is not None and 'diagonal_gate' in gate_info:
+                modes = [qudit_modes[q] for q in qudits]
+                operands += [op, modes]
+            elif isinstance(op, (list, tuple)):
                 # for MPO
                 prev_mode = None
                 for i, q in enumerate(qudits):
