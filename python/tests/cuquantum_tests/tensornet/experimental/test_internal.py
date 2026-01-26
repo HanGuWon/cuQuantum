@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -111,4 +111,13 @@ class TestGenericState(_BaseTester):
                                mpo_geometry=mpo_geometry,
                                adjacent_double_layer=False)
         self._test_factory(factory, mpo_application='exact', gauge_option=gauge_option)
-        
+
+    def test_diagonal_gate_layer(self, qudits, gauge_option):
+        rng = self._get_rng(qudits, gauge_option)
+        backend = self._get_array_framework(qudits, gauge_option)
+        factory = StateFactory(qudits, 
+                               "complex128", 
+                               'SADSA', 
+                               rng,
+                               backend=backend)
+        self._test_factory(factory, gauge_option=gauge_option)

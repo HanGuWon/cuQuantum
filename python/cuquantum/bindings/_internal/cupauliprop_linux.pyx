@@ -1,8 +1,8 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# This code was automatically generated with version 25.11.0. Do not modify it directly.
+# This code was automatically generated across versions from 25.11.0 to 26.01.0. Do not modify it directly.
 
 from libc.stdint cimport intptr_t
 
@@ -14,6 +14,8 @@ from .._utils import FunctionNotFoundError, NotSupportedError
 ###############################################################################
 # Extern
 ###############################################################################
+
+# You must 'from .utils import NotSupportedError' before using this template
 
 cdef extern from "<dlfcn.h>" nogil:
     void* dlopen(const char*, int)
@@ -48,6 +50,7 @@ cdef int get_cuda_version():
     return driver_ver
 
 
+
 ###############################################################################
 # Wrapper init
 ###############################################################################
@@ -60,7 +63,6 @@ cdef void* __cupaulipropGetErrorString = NULL
 cdef void* __cupaulipropGetNumPackedIntegers = NULL
 cdef void* __cupaulipropCreate = NULL
 cdef void* __cupaulipropDestroy = NULL
-cdef void* __cupaulipropSetStream = NULL
 cdef void* __cupaulipropCreateWorkspaceDescriptor = NULL
 cdef void* __cupaulipropDestroyWorkspaceDescriptor = NULL
 cdef void* __cupaulipropWorkspaceGetMemorySize = NULL
@@ -72,7 +74,6 @@ cdef void* __cupaulipropPauliExpansionGetStorageBuffer = NULL
 cdef void* __cupaulipropPauliExpansionGetNumQubits = NULL
 cdef void* __cupaulipropPauliExpansionGetNumTerms = NULL
 cdef void* __cupaulipropPauliExpansionGetDataType = NULL
-cdef void* __cupaulipropPauliExpansionIsSorted = NULL
 cdef void* __cupaulipropPauliExpansionIsDeduplicated = NULL
 cdef void* __cupaulipropPauliExpansionGetTerm = NULL
 cdef void* __cupaulipropPauliExpansionGetContiguousRange = NULL
@@ -82,8 +83,6 @@ cdef void* __cupaulipropPauliExpansionViewGetLocation = NULL
 cdef void* __cupaulipropPauliExpansionViewGetTerm = NULL
 cdef void* __cupaulipropPauliExpansionViewPrepareDeduplication = NULL
 cdef void* __cupaulipropPauliExpansionViewExecuteDeduplication = NULL
-cdef void* __cupaulipropPauliExpansionViewPrepareCanonicalSort = NULL
-cdef void* __cupaulipropPauliExpansionViewExecuteCanonicalSort = NULL
 cdef void* __cupaulipropPauliExpansionPopulateFromView = NULL
 cdef void* __cupaulipropPauliExpansionViewPrepareTraceWithExpansionView = NULL
 cdef void* __cupaulipropPauliExpansionViewComputeTraceWithExpansionView = NULL
@@ -98,6 +97,10 @@ cdef void* __cupaulipropCreatePauliRotationGateOperator = NULL
 cdef void* __cupaulipropCreatePauliNoiseChannelOperator = NULL
 cdef void* __cupaulipropQuantumOperatorGetKind = NULL
 cdef void* __cupaulipropDestroyOperator = NULL
+cdef void* __cupaulipropPauliExpansionGetSortOrder = NULL
+cdef void* __cupaulipropPauliExpansionViewPrepareSort = NULL
+cdef void* __cupaulipropPauliExpansionViewExecuteSort = NULL
+cdef void* __cupaulipropCreateAmplitudeDampingChannelOperator = NULL
 
 
 cdef void* load_library() except* nogil:
@@ -152,13 +155,6 @@ cdef int _check_or_init_cupauliprop() except -1 nogil:
             if handle == NULL:
                 handle = load_library()
             __cupaulipropDestroy = dlsym(handle, 'cupaulipropDestroy')
-
-        global __cupaulipropSetStream
-        __cupaulipropSetStream = dlsym(RTLD_DEFAULT, 'cupaulipropSetStream')
-        if __cupaulipropSetStream == NULL:
-            if handle == NULL:
-                handle = load_library()
-            __cupaulipropSetStream = dlsym(handle, 'cupaulipropSetStream')
 
         global __cupaulipropCreateWorkspaceDescriptor
         __cupaulipropCreateWorkspaceDescriptor = dlsym(RTLD_DEFAULT, 'cupaulipropCreateWorkspaceDescriptor')
@@ -237,13 +233,6 @@ cdef int _check_or_init_cupauliprop() except -1 nogil:
                 handle = load_library()
             __cupaulipropPauliExpansionGetDataType = dlsym(handle, 'cupaulipropPauliExpansionGetDataType')
 
-        global __cupaulipropPauliExpansionIsSorted
-        __cupaulipropPauliExpansionIsSorted = dlsym(RTLD_DEFAULT, 'cupaulipropPauliExpansionIsSorted')
-        if __cupaulipropPauliExpansionIsSorted == NULL:
-            if handle == NULL:
-                handle = load_library()
-            __cupaulipropPauliExpansionIsSorted = dlsym(handle, 'cupaulipropPauliExpansionIsSorted')
-
         global __cupaulipropPauliExpansionIsDeduplicated
         __cupaulipropPauliExpansionIsDeduplicated = dlsym(RTLD_DEFAULT, 'cupaulipropPauliExpansionIsDeduplicated')
         if __cupaulipropPauliExpansionIsDeduplicated == NULL:
@@ -306,20 +295,6 @@ cdef int _check_or_init_cupauliprop() except -1 nogil:
             if handle == NULL:
                 handle = load_library()
             __cupaulipropPauliExpansionViewExecuteDeduplication = dlsym(handle, 'cupaulipropPauliExpansionViewExecuteDeduplication')
-
-        global __cupaulipropPauliExpansionViewPrepareCanonicalSort
-        __cupaulipropPauliExpansionViewPrepareCanonicalSort = dlsym(RTLD_DEFAULT, 'cupaulipropPauliExpansionViewPrepareCanonicalSort')
-        if __cupaulipropPauliExpansionViewPrepareCanonicalSort == NULL:
-            if handle == NULL:
-                handle = load_library()
-            __cupaulipropPauliExpansionViewPrepareCanonicalSort = dlsym(handle, 'cupaulipropPauliExpansionViewPrepareCanonicalSort')
-
-        global __cupaulipropPauliExpansionViewExecuteCanonicalSort
-        __cupaulipropPauliExpansionViewExecuteCanonicalSort = dlsym(RTLD_DEFAULT, 'cupaulipropPauliExpansionViewExecuteCanonicalSort')
-        if __cupaulipropPauliExpansionViewExecuteCanonicalSort == NULL:
-            if handle == NULL:
-                handle = load_library()
-            __cupaulipropPauliExpansionViewExecuteCanonicalSort = dlsym(handle, 'cupaulipropPauliExpansionViewExecuteCanonicalSort')
 
         global __cupaulipropPauliExpansionPopulateFromView
         __cupaulipropPauliExpansionPopulateFromView = dlsym(RTLD_DEFAULT, 'cupaulipropPauliExpansionPopulateFromView')
@@ -418,6 +393,34 @@ cdef int _check_or_init_cupauliprop() except -1 nogil:
             if handle == NULL:
                 handle = load_library()
             __cupaulipropDestroyOperator = dlsym(handle, 'cupaulipropDestroyOperator')
+
+        global __cupaulipropPauliExpansionGetSortOrder
+        __cupaulipropPauliExpansionGetSortOrder = dlsym(RTLD_DEFAULT, 'cupaulipropPauliExpansionGetSortOrder')
+        if __cupaulipropPauliExpansionGetSortOrder == NULL:
+            if handle == NULL:
+                handle = load_library()
+            __cupaulipropPauliExpansionGetSortOrder = dlsym(handle, 'cupaulipropPauliExpansionGetSortOrder')
+
+        global __cupaulipropPauliExpansionViewPrepareSort
+        __cupaulipropPauliExpansionViewPrepareSort = dlsym(RTLD_DEFAULT, 'cupaulipropPauliExpansionViewPrepareSort')
+        if __cupaulipropPauliExpansionViewPrepareSort == NULL:
+            if handle == NULL:
+                handle = load_library()
+            __cupaulipropPauliExpansionViewPrepareSort = dlsym(handle, 'cupaulipropPauliExpansionViewPrepareSort')
+
+        global __cupaulipropPauliExpansionViewExecuteSort
+        __cupaulipropPauliExpansionViewExecuteSort = dlsym(RTLD_DEFAULT, 'cupaulipropPauliExpansionViewExecuteSort')
+        if __cupaulipropPauliExpansionViewExecuteSort == NULL:
+            if handle == NULL:
+                handle = load_library()
+            __cupaulipropPauliExpansionViewExecuteSort = dlsym(handle, 'cupaulipropPauliExpansionViewExecuteSort')
+
+        global __cupaulipropCreateAmplitudeDampingChannelOperator
+        __cupaulipropCreateAmplitudeDampingChannelOperator = dlsym(RTLD_DEFAULT, 'cupaulipropCreateAmplitudeDampingChannelOperator')
+        if __cupaulipropCreateAmplitudeDampingChannelOperator == NULL:
+            if handle == NULL:
+                handle = load_library()
+            __cupaulipropCreateAmplitudeDampingChannelOperator = dlsym(handle, 'cupaulipropCreateAmplitudeDampingChannelOperator')
         __py_cupauliprop_init = True
         return 0
 
@@ -440,9 +443,6 @@ cpdef dict _inspect_function_pointers():
 
     global __cupaulipropDestroy
     data["__cupaulipropDestroy"] = <intptr_t>__cupaulipropDestroy
-
-    global __cupaulipropSetStream
-    data["__cupaulipropSetStream"] = <intptr_t>__cupaulipropSetStream
 
     global __cupaulipropCreateWorkspaceDescriptor
     data["__cupaulipropCreateWorkspaceDescriptor"] = <intptr_t>__cupaulipropCreateWorkspaceDescriptor
@@ -477,9 +477,6 @@ cpdef dict _inspect_function_pointers():
     global __cupaulipropPauliExpansionGetDataType
     data["__cupaulipropPauliExpansionGetDataType"] = <intptr_t>__cupaulipropPauliExpansionGetDataType
 
-    global __cupaulipropPauliExpansionIsSorted
-    data["__cupaulipropPauliExpansionIsSorted"] = <intptr_t>__cupaulipropPauliExpansionIsSorted
-
     global __cupaulipropPauliExpansionIsDeduplicated
     data["__cupaulipropPauliExpansionIsDeduplicated"] = <intptr_t>__cupaulipropPauliExpansionIsDeduplicated
 
@@ -506,12 +503,6 @@ cpdef dict _inspect_function_pointers():
 
     global __cupaulipropPauliExpansionViewExecuteDeduplication
     data["__cupaulipropPauliExpansionViewExecuteDeduplication"] = <intptr_t>__cupaulipropPauliExpansionViewExecuteDeduplication
-
-    global __cupaulipropPauliExpansionViewPrepareCanonicalSort
-    data["__cupaulipropPauliExpansionViewPrepareCanonicalSort"] = <intptr_t>__cupaulipropPauliExpansionViewPrepareCanonicalSort
-
-    global __cupaulipropPauliExpansionViewExecuteCanonicalSort
-    data["__cupaulipropPauliExpansionViewExecuteCanonicalSort"] = <intptr_t>__cupaulipropPauliExpansionViewExecuteCanonicalSort
 
     global __cupaulipropPauliExpansionPopulateFromView
     data["__cupaulipropPauliExpansionPopulateFromView"] = <intptr_t>__cupaulipropPauliExpansionPopulateFromView
@@ -554,6 +545,18 @@ cpdef dict _inspect_function_pointers():
 
     global __cupaulipropDestroyOperator
     data["__cupaulipropDestroyOperator"] = <intptr_t>__cupaulipropDestroyOperator
+
+    global __cupaulipropPauliExpansionGetSortOrder
+    data["__cupaulipropPauliExpansionGetSortOrder"] = <intptr_t>__cupaulipropPauliExpansionGetSortOrder
+
+    global __cupaulipropPauliExpansionViewPrepareSort
+    data["__cupaulipropPauliExpansionViewPrepareSort"] = <intptr_t>__cupaulipropPauliExpansionViewPrepareSort
+
+    global __cupaulipropPauliExpansionViewExecuteSort
+    data["__cupaulipropPauliExpansionViewExecuteSort"] = <intptr_t>__cupaulipropPauliExpansionViewExecuteSort
+
+    global __cupaulipropCreateAmplitudeDampingChannelOperator
+    data["__cupaulipropCreateAmplitudeDampingChannelOperator"] = <intptr_t>__cupaulipropCreateAmplitudeDampingChannelOperator
 
     return data
 
@@ -612,16 +615,6 @@ cdef cupaulipropStatus_t _cupaulipropDestroy(cupaulipropHandle_t handle) except?
         handle)
 
 
-cdef cupaulipropStatus_t _cupaulipropSetStream(cupaulipropHandle_t handle, cudaStream_t stream) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
-    global __cupaulipropSetStream
-    _check_or_init_cupauliprop()
-    if __cupaulipropSetStream == NULL:
-        with gil:
-            raise FunctionNotFoundError("function cupaulipropSetStream is not found")
-    return (<cupaulipropStatus_t (*)(cupaulipropHandle_t, cudaStream_t) noexcept nogil>__cupaulipropSetStream)(
-        handle, stream)
-
-
 cdef cupaulipropStatus_t _cupaulipropCreateWorkspaceDescriptor(cupaulipropHandle_t handle, cupaulipropWorkspaceDescriptor_t* workspaceDesc) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
     global __cupaulipropCreateWorkspaceDescriptor
     _check_or_init_cupauliprop()
@@ -672,14 +665,14 @@ cdef cupaulipropStatus_t _cupaulipropWorkspaceGetMemory(const cupaulipropHandle_
         handle, workspaceDescr, memSpace, workspaceKind, memoryBuffer, memoryBufferSize)
 
 
-cdef cupaulipropStatus_t _cupaulipropCreatePauliExpansion(const cupaulipropHandle_t handle, int32_t numQubits, void* xzBitsBuffer, int64_t xzBitsBufferSize, void* coefBuffer, int64_t coefBufferSize, cudaDataType_t dataType, int64_t numTerms, int32_t isSorted, int32_t hasDuplicates, cupaulipropPauliExpansion_t* pauliExpansion) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+cdef cupaulipropStatus_t _cupaulipropCreatePauliExpansion(const cupaulipropHandle_t handle, int32_t numQubits, void* xzBitsBuffer, int64_t xzBitsBufferSize, void* coefBuffer, int64_t coefBufferSize, cudaDataType_t dataType, int64_t numTerms, cupaulipropSortOrder_t sortOrder, int32_t hasDuplicates, cupaulipropPauliExpansion_t* pauliExpansion) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
     global __cupaulipropCreatePauliExpansion
     _check_or_init_cupauliprop()
     if __cupaulipropCreatePauliExpansion == NULL:
         with gil:
             raise FunctionNotFoundError("function cupaulipropCreatePauliExpansion is not found")
-    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, int32_t, void*, int64_t, void*, int64_t, cudaDataType_t, int64_t, int32_t, int32_t, cupaulipropPauliExpansion_t*) noexcept nogil>__cupaulipropCreatePauliExpansion)(
-        handle, numQubits, xzBitsBuffer, xzBitsBufferSize, coefBuffer, coefBufferSize, dataType, numTerms, isSorted, hasDuplicates, pauliExpansion)
+    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, int32_t, void*, int64_t, void*, int64_t, cudaDataType_t, int64_t, cupaulipropSortOrder_t, int32_t, cupaulipropPauliExpansion_t*) noexcept nogil>__cupaulipropCreatePauliExpansion)(
+        handle, numQubits, xzBitsBuffer, xzBitsBufferSize, coefBuffer, coefBufferSize, dataType, numTerms, sortOrder, hasDuplicates, pauliExpansion)
 
 
 cdef cupaulipropStatus_t _cupaulipropDestroyPauliExpansion(cupaulipropPauliExpansion_t pauliExpansion) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
@@ -730,16 +723,6 @@ cdef cupaulipropStatus_t _cupaulipropPauliExpansionGetDataType(const cupauliprop
             raise FunctionNotFoundError("function cupaulipropPauliExpansionGetDataType is not found")
     return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansion_t, cudaDataType_t*) noexcept nogil>__cupaulipropPauliExpansionGetDataType)(
         handle, pauliExpansion, dataType)
-
-
-cdef cupaulipropStatus_t _cupaulipropPauliExpansionIsSorted(const cupaulipropHandle_t handle, const cupaulipropPauliExpansion_t pauliExpansion, int32_t* isSorted) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
-    global __cupaulipropPauliExpansionIsSorted
-    _check_or_init_cupauliprop()
-    if __cupaulipropPauliExpansionIsSorted == NULL:
-        with gil:
-            raise FunctionNotFoundError("function cupaulipropPauliExpansionIsSorted is not found")
-    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansion_t, int32_t*) noexcept nogil>__cupaulipropPauliExpansionIsSorted)(
-        handle, pauliExpansion, isSorted)
 
 
 cdef cupaulipropStatus_t _cupaulipropPauliExpansionIsDeduplicated(const cupaulipropHandle_t handle, const cupaulipropPauliExpansion_t pauliExpansion, int32_t* isDeduplicated) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
@@ -812,54 +795,34 @@ cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewGetTerm(const cupauliprop
         handle, view, termIndex, term)
 
 
-cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewPrepareDeduplication(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, int32_t makeSorted, int64_t maxWorkspaceSize, cupaulipropWorkspaceDescriptor_t workspace) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewPrepareDeduplication(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, cupaulipropSortOrder_t sortOrder, int64_t maxWorkspaceSize, cupaulipropWorkspaceDescriptor_t workspace) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
     global __cupaulipropPauliExpansionViewPrepareDeduplication
     _check_or_init_cupauliprop()
     if __cupaulipropPauliExpansionViewPrepareDeduplication == NULL:
         with gil:
             raise FunctionNotFoundError("function cupaulipropPauliExpansionViewPrepareDeduplication is not found")
-    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, int32_t, int64_t, cupaulipropWorkspaceDescriptor_t) noexcept nogil>__cupaulipropPauliExpansionViewPrepareDeduplication)(
-        handle, viewIn, makeSorted, maxWorkspaceSize, workspace)
+    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, cupaulipropSortOrder_t, int64_t, cupaulipropWorkspaceDescriptor_t) noexcept nogil>__cupaulipropPauliExpansionViewPrepareDeduplication)(
+        handle, viewIn, sortOrder, maxWorkspaceSize, workspace)
 
 
-cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewExecuteDeduplication(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, cupaulipropPauliExpansion_t expansionOut, int32_t makeSorted, cupaulipropWorkspaceDescriptor_t workspace) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewExecuteDeduplication(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, cupaulipropPauliExpansion_t expansionOut, cupaulipropSortOrder_t sortOrder, cupaulipropWorkspaceDescriptor_t workspace, cudaStream_t stream) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
     global __cupaulipropPauliExpansionViewExecuteDeduplication
     _check_or_init_cupauliprop()
     if __cupaulipropPauliExpansionViewExecuteDeduplication == NULL:
         with gil:
             raise FunctionNotFoundError("function cupaulipropPauliExpansionViewExecuteDeduplication is not found")
-    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, cupaulipropPauliExpansion_t, int32_t, cupaulipropWorkspaceDescriptor_t) noexcept nogil>__cupaulipropPauliExpansionViewExecuteDeduplication)(
-        handle, viewIn, expansionOut, makeSorted, workspace)
+    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, cupaulipropPauliExpansion_t, cupaulipropSortOrder_t, cupaulipropWorkspaceDescriptor_t, cudaStream_t) noexcept nogil>__cupaulipropPauliExpansionViewExecuteDeduplication)(
+        handle, viewIn, expansionOut, sortOrder, workspace, stream)
 
 
-cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewPrepareCanonicalSort(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, int64_t maxWorkspaceSize, cupaulipropWorkspaceDescriptor_t workspace) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
-    global __cupaulipropPauliExpansionViewPrepareCanonicalSort
-    _check_or_init_cupauliprop()
-    if __cupaulipropPauliExpansionViewPrepareCanonicalSort == NULL:
-        with gil:
-            raise FunctionNotFoundError("function cupaulipropPauliExpansionViewPrepareCanonicalSort is not found")
-    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, int64_t, cupaulipropWorkspaceDescriptor_t) noexcept nogil>__cupaulipropPauliExpansionViewPrepareCanonicalSort)(
-        handle, viewIn, maxWorkspaceSize, workspace)
-
-
-cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewExecuteCanonicalSort(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, cupaulipropPauliExpansion_t expansionOut, cupaulipropWorkspaceDescriptor_t workspace) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
-    global __cupaulipropPauliExpansionViewExecuteCanonicalSort
-    _check_or_init_cupauliprop()
-    if __cupaulipropPauliExpansionViewExecuteCanonicalSort == NULL:
-        with gil:
-            raise FunctionNotFoundError("function cupaulipropPauliExpansionViewExecuteCanonicalSort is not found")
-    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, cupaulipropPauliExpansion_t, cupaulipropWorkspaceDescriptor_t) noexcept nogil>__cupaulipropPauliExpansionViewExecuteCanonicalSort)(
-        handle, viewIn, expansionOut, workspace)
-
-
-cdef cupaulipropStatus_t _cupaulipropPauliExpansionPopulateFromView(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, cupaulipropPauliExpansion_t expansionOut) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+cdef cupaulipropStatus_t _cupaulipropPauliExpansionPopulateFromView(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, cupaulipropPauliExpansion_t expansionOut, cudaStream_t stream) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
     global __cupaulipropPauliExpansionPopulateFromView
     _check_or_init_cupauliprop()
     if __cupaulipropPauliExpansionPopulateFromView == NULL:
         with gil:
             raise FunctionNotFoundError("function cupaulipropPauliExpansionPopulateFromView is not found")
-    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, cupaulipropPauliExpansion_t) noexcept nogil>__cupaulipropPauliExpansionPopulateFromView)(
-        handle, viewIn, expansionOut)
+    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, cupaulipropPauliExpansion_t, cudaStream_t) noexcept nogil>__cupaulipropPauliExpansionPopulateFromView)(
+        handle, viewIn, expansionOut, stream)
 
 
 cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewPrepareTraceWithExpansionView(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t view1, const cupaulipropPauliExpansionView_t view2, int64_t maxWorkspaceSize, cupaulipropWorkspaceDescriptor_t workspace) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
@@ -872,14 +835,14 @@ cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewPrepareTraceWithExpansion
         handle, view1, view2, maxWorkspaceSize, workspace)
 
 
-cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewComputeTraceWithExpansionView(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t view1, const cupaulipropPauliExpansionView_t view2, int32_t takeAdjoint1, void* trace, cupaulipropWorkspaceDescriptor_t workspace) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewComputeTraceWithExpansionView(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t view1, const cupaulipropPauliExpansionView_t view2, int32_t takeAdjoint1, void* trace, cupaulipropWorkspaceDescriptor_t workspace, cudaStream_t stream) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
     global __cupaulipropPauliExpansionViewComputeTraceWithExpansionView
     _check_or_init_cupauliprop()
     if __cupaulipropPauliExpansionViewComputeTraceWithExpansionView == NULL:
         with gil:
             raise FunctionNotFoundError("function cupaulipropPauliExpansionViewComputeTraceWithExpansionView is not found")
-    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, const cupaulipropPauliExpansionView_t, int32_t, void*, cupaulipropWorkspaceDescriptor_t) noexcept nogil>__cupaulipropPauliExpansionViewComputeTraceWithExpansionView)(
-        handle, view1, view2, takeAdjoint1, trace, workspace)
+    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, const cupaulipropPauliExpansionView_t, int32_t, void*, cupaulipropWorkspaceDescriptor_t, cudaStream_t) noexcept nogil>__cupaulipropPauliExpansionViewComputeTraceWithExpansionView)(
+        handle, view1, view2, takeAdjoint1, trace, workspace, stream)
 
 
 cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewPrepareTraceWithZeroState(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t view, int64_t maxWorkspaceSize, cupaulipropWorkspaceDescriptor_t workspace) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
@@ -892,34 +855,34 @@ cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewPrepareTraceWithZeroState
         handle, view, maxWorkspaceSize, workspace)
 
 
-cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewComputeTraceWithZeroState(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t view, void* trace, cupaulipropWorkspaceDescriptor_t workspace) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewComputeTraceWithZeroState(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t view, void* trace, cupaulipropWorkspaceDescriptor_t workspace, cudaStream_t stream) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
     global __cupaulipropPauliExpansionViewComputeTraceWithZeroState
     _check_or_init_cupauliprop()
     if __cupaulipropPauliExpansionViewComputeTraceWithZeroState == NULL:
         with gil:
             raise FunctionNotFoundError("function cupaulipropPauliExpansionViewComputeTraceWithZeroState is not found")
-    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, void*, cupaulipropWorkspaceDescriptor_t) noexcept nogil>__cupaulipropPauliExpansionViewComputeTraceWithZeroState)(
-        handle, view, trace, workspace)
+    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, void*, cupaulipropWorkspaceDescriptor_t, cudaStream_t) noexcept nogil>__cupaulipropPauliExpansionViewComputeTraceWithZeroState)(
+        handle, view, trace, workspace, stream)
 
 
-cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewPrepareOperatorApplication(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, const cupaulipropQuantumOperator_t quantumOperator, int32_t makeSorted, int32_t keepDuplicates, int32_t numTruncationStrategies, const cupaulipropTruncationStrategy_t truncationStrategies[], int64_t maxWorkspaceSize, int64_t* requiredXZBitsBufferSize, int64_t* requiredCoefBufferSize, cupaulipropWorkspaceDescriptor_t workspace) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewPrepareOperatorApplication(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, const cupaulipropQuantumOperator_t quantumOperator, cupaulipropSortOrder_t sortOrder, int32_t keepDuplicates, int32_t numTruncationStrategies, const cupaulipropTruncationStrategy_t truncationStrategies[], int64_t maxWorkspaceSize, int64_t* requiredXZBitsBufferSize, int64_t* requiredCoefBufferSize, cupaulipropWorkspaceDescriptor_t workspace) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
     global __cupaulipropPauliExpansionViewPrepareOperatorApplication
     _check_or_init_cupauliprop()
     if __cupaulipropPauliExpansionViewPrepareOperatorApplication == NULL:
         with gil:
             raise FunctionNotFoundError("function cupaulipropPauliExpansionViewPrepareOperatorApplication is not found")
-    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, const cupaulipropQuantumOperator_t, int32_t, int32_t, int32_t, const cupaulipropTruncationStrategy_t*, int64_t, int64_t*, int64_t*, cupaulipropWorkspaceDescriptor_t) noexcept nogil>__cupaulipropPauliExpansionViewPrepareOperatorApplication)(
-        handle, viewIn, quantumOperator, makeSorted, keepDuplicates, numTruncationStrategies, truncationStrategies, maxWorkspaceSize, requiredXZBitsBufferSize, requiredCoefBufferSize, workspace)
+    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, const cupaulipropQuantumOperator_t, cupaulipropSortOrder_t, int32_t, int32_t, const cupaulipropTruncationStrategy_t*, int64_t, int64_t*, int64_t*, cupaulipropWorkspaceDescriptor_t) noexcept nogil>__cupaulipropPauliExpansionViewPrepareOperatorApplication)(
+        handle, viewIn, quantumOperator, sortOrder, keepDuplicates, numTruncationStrategies, truncationStrategies, maxWorkspaceSize, requiredXZBitsBufferSize, requiredCoefBufferSize, workspace)
 
 
-cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewComputeOperatorApplication(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, cupaulipropPauliExpansion_t expansionOut, const cupaulipropQuantumOperator_t quantumOperator, int32_t adjoint, int32_t makeSorted, int32_t keepDuplicates, int32_t numTruncationStrategies, const cupaulipropTruncationStrategy_t truncationStrategies[], cupaulipropWorkspaceDescriptor_t workspace) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewComputeOperatorApplication(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, cupaulipropPauliExpansion_t expansionOut, const cupaulipropQuantumOperator_t quantumOperator, int32_t adjoint, cupaulipropSortOrder_t sortOrder, int32_t keepDuplicates, int32_t numTruncationStrategies, const cupaulipropTruncationStrategy_t truncationStrategies[], cupaulipropWorkspaceDescriptor_t workspace, cudaStream_t stream) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
     global __cupaulipropPauliExpansionViewComputeOperatorApplication
     _check_or_init_cupauliprop()
     if __cupaulipropPauliExpansionViewComputeOperatorApplication == NULL:
         with gil:
             raise FunctionNotFoundError("function cupaulipropPauliExpansionViewComputeOperatorApplication is not found")
-    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, cupaulipropPauliExpansion_t, const cupaulipropQuantumOperator_t, int32_t, int32_t, int32_t, int32_t, const cupaulipropTruncationStrategy_t*, cupaulipropWorkspaceDescriptor_t) noexcept nogil>__cupaulipropPauliExpansionViewComputeOperatorApplication)(
-        handle, viewIn, expansionOut, quantumOperator, adjoint, makeSorted, keepDuplicates, numTruncationStrategies, truncationStrategies, workspace)
+    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, cupaulipropPauliExpansion_t, const cupaulipropQuantumOperator_t, int32_t, cupaulipropSortOrder_t, int32_t, int32_t, const cupaulipropTruncationStrategy_t*, cupaulipropWorkspaceDescriptor_t, cudaStream_t) noexcept nogil>__cupaulipropPauliExpansionViewComputeOperatorApplication)(
+        handle, viewIn, expansionOut, quantumOperator, adjoint, sortOrder, keepDuplicates, numTruncationStrategies, truncationStrategies, workspace, stream)
 
 
 cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewPrepareTruncation(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, int32_t numTruncationStrategies, const cupaulipropTruncationStrategy_t truncationStrategies[], int64_t maxWorkspaceSize, cupaulipropWorkspaceDescriptor_t workspace) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
@@ -932,14 +895,14 @@ cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewPrepareTruncation(const c
         handle, viewIn, numTruncationStrategies, truncationStrategies, maxWorkspaceSize, workspace)
 
 
-cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewExecuteTruncation(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, cupaulipropPauliExpansion_t expansionOut, int32_t numTruncationStrategies, const cupaulipropTruncationStrategy_t truncationStrategies[], cupaulipropWorkspaceDescriptor_t workspace) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewExecuteTruncation(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, cupaulipropPauliExpansion_t expansionOut, int32_t numTruncationStrategies, const cupaulipropTruncationStrategy_t truncationStrategies[], cupaulipropWorkspaceDescriptor_t workspace, cudaStream_t stream) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
     global __cupaulipropPauliExpansionViewExecuteTruncation
     _check_or_init_cupauliprop()
     if __cupaulipropPauliExpansionViewExecuteTruncation == NULL:
         with gil:
             raise FunctionNotFoundError("function cupaulipropPauliExpansionViewExecuteTruncation is not found")
-    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, cupaulipropPauliExpansion_t, int32_t, const cupaulipropTruncationStrategy_t*, cupaulipropWorkspaceDescriptor_t) noexcept nogil>__cupaulipropPauliExpansionViewExecuteTruncation)(
-        handle, viewIn, expansionOut, numTruncationStrategies, truncationStrategies, workspace)
+    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, cupaulipropPauliExpansion_t, int32_t, const cupaulipropTruncationStrategy_t*, cupaulipropWorkspaceDescriptor_t, cudaStream_t) noexcept nogil>__cupaulipropPauliExpansionViewExecuteTruncation)(
+        handle, viewIn, expansionOut, numTruncationStrategies, truncationStrategies, workspace, stream)
 
 
 cdef cupaulipropStatus_t _cupaulipropCreateCliffordGateOperator(const cupaulipropHandle_t handle, cupaulipropCliffordGateKind_t cliffordGateKind, const int32_t qubitIndices[], cupaulipropQuantumOperator_t* oper) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
@@ -990,3 +953,43 @@ cdef cupaulipropStatus_t _cupaulipropDestroyOperator(cupaulipropQuantumOperator_
             raise FunctionNotFoundError("function cupaulipropDestroyOperator is not found")
     return (<cupaulipropStatus_t (*)(cupaulipropQuantumOperator_t) noexcept nogil>__cupaulipropDestroyOperator)(
         oper)
+
+
+cdef cupaulipropStatus_t _cupaulipropPauliExpansionGetSortOrder(const cupaulipropHandle_t handle, const cupaulipropPauliExpansion_t pauliExpansion, cupaulipropSortOrder_t* sortOrder) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+    global __cupaulipropPauliExpansionGetSortOrder
+    _check_or_init_cupauliprop()
+    if __cupaulipropPauliExpansionGetSortOrder == NULL:
+        with gil:
+            raise FunctionNotFoundError("function cupaulipropPauliExpansionGetSortOrder is not found")
+    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansion_t, cupaulipropSortOrder_t*) noexcept nogil>__cupaulipropPauliExpansionGetSortOrder)(
+        handle, pauliExpansion, sortOrder)
+
+
+cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewPrepareSort(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, cupaulipropSortOrder_t sortOrder, int64_t maxWorkspaceSize, cupaulipropWorkspaceDescriptor_t workspace) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+    global __cupaulipropPauliExpansionViewPrepareSort
+    _check_or_init_cupauliprop()
+    if __cupaulipropPauliExpansionViewPrepareSort == NULL:
+        with gil:
+            raise FunctionNotFoundError("function cupaulipropPauliExpansionViewPrepareSort is not found")
+    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, cupaulipropSortOrder_t, int64_t, cupaulipropWorkspaceDescriptor_t) noexcept nogil>__cupaulipropPauliExpansionViewPrepareSort)(
+        handle, viewIn, sortOrder, maxWorkspaceSize, workspace)
+
+
+cdef cupaulipropStatus_t _cupaulipropPauliExpansionViewExecuteSort(const cupaulipropHandle_t handle, const cupaulipropPauliExpansionView_t viewIn, cupaulipropPauliExpansion_t expansionOut, cupaulipropSortOrder_t sortOrder, cupaulipropWorkspaceDescriptor_t workspace, cudaStream_t stream) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+    global __cupaulipropPauliExpansionViewExecuteSort
+    _check_or_init_cupauliprop()
+    if __cupaulipropPauliExpansionViewExecuteSort == NULL:
+        with gil:
+            raise FunctionNotFoundError("function cupaulipropPauliExpansionViewExecuteSort is not found")
+    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, const cupaulipropPauliExpansionView_t, cupaulipropPauliExpansion_t, cupaulipropSortOrder_t, cupaulipropWorkspaceDescriptor_t, cudaStream_t) noexcept nogil>__cupaulipropPauliExpansionViewExecuteSort)(
+        handle, viewIn, expansionOut, sortOrder, workspace, stream)
+
+
+cdef cupaulipropStatus_t _cupaulipropCreateAmplitudeDampingChannelOperator(const cupaulipropHandle_t handle, int32_t qubitIndex, double dampingProb, double exciteProb, cupaulipropQuantumOperator_t* oper) except?_CUPAULIPROPSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+    global __cupaulipropCreateAmplitudeDampingChannelOperator
+    _check_or_init_cupauliprop()
+    if __cupaulipropCreateAmplitudeDampingChannelOperator == NULL:
+        with gil:
+            raise FunctionNotFoundError("function cupaulipropCreateAmplitudeDampingChannelOperator is not found")
+    return (<cupaulipropStatus_t (*)(const cupaulipropHandle_t, int32_t, double, double, cupaulipropQuantumOperator_t*) noexcept nogil>__cupaulipropCreateAmplitudeDampingChannelOperator)(
+        handle, qubitIndex, dampingProb, exciteProb, oper)

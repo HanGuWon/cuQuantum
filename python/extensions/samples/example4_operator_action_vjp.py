@@ -1,14 +1,12 @@
-# Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-import importlib
 import math
-import logging
-import sys
 
 import jax
 import jax.numpy as jnp
+import cupy as cp
 
 jax.config.update("jax_enable_x64", True)
 jax.config.update("jax_default_matmul_precision", "highest")
@@ -20,6 +18,49 @@ from cuquantum.densitymat.jax import (
     Operator,
     operator_action
 )
+
+
+# Define callbacks outside jitted scope to avoid JAX tracing interference
+def n_callback(t, args, storage):
+    storage[:] = 0.0
+    for m in range(storage.shape[0]):
+        for n in range(storage.shape[1]):
+            storage[m, n] = m * n * cp.tan(args[0] * t)
+            if storage.dtype.kind == 'c':
+                storage[m, n] += 1j * m * n / cp.tan(args[0] * t)
+
+
+def n_grad_callback(t, args, tensor_grad, params_grad):
+    for m in range(tensor_grad.shape[0]):
+        for n in range(tensor_grad.shape[1]):
+            params_grad[0] += 2 * (
+                tensor_grad[m, n] * (m * n * t / cp.cos(args[0] * t) ** 2)
+                ).real
+            if tensor_grad.dtype.kind == 'c':
+                params_grad[0] += 2 * (
+                    tensor_grad[m, n] * (-1j * m * n * t / cp.sin(args[0] * t) ** 2)
+                    ).real
+
+
+def a_callback(t, args, storage):
+    storage[:] = 0.0
+    dim = storage.shape[0]
+    for i in range(1, dim):
+        storage[i - 1, i] = math.sqrt(i)
+
+
+def ad_callback(t, args, storage):
+    storage[:] = 0.0
+    dim = storage.shape[0]
+    for i in range(1, dim):
+        storage[i, i - 1] = math.sqrt(i)
+
+
+# Wrap callbacks outside jitted scope
+n_wrapped_callback = cudm.WrappedTensorCallback(n_callback, cudm.CallbackDevice.GPU)
+n_wrapped_grad_callback = cudm.WrappedTensorGradientCallback(n_grad_callback, cudm.CallbackDevice.GPU)
+a_wrapped_callback = cudm.WrappedTensorCallback(a_callback, cudm.CallbackDevice.GPU)
+ad_wrapped_callback = cudm.WrappedTensorCallback(ad_callback, cudm.CallbackDevice.GPU)
 
 
 @jax.jit
@@ -36,50 +77,10 @@ def main():
     jax.debug.print("Defined input state data buffer.")
 
     # Data buffers for elementary operators. The buffers are filled with different values to avoid JAX aliasing.
-    random_consts = jax.random.uniform(key, [3])
-    n_data_empty = jnp.full((space_mode_extents[0], space_mode_extents[0]), random_consts[0], dtype=dtype)
-    a_data_empty = jnp.full((space_mode_extents[1], space_mode_extents[1]), random_consts[1], dtype=dtype)
-    ad_data_empty = jnp.full((space_mode_extents[1], space_mode_extents[1]), random_consts[2], dtype=dtype)
+    n_data_empty = jax.ShapeDtypeStruct((space_mode_extents[0], space_mode_extents[0]), dtype)
+    a_data_empty = jax.ShapeDtypeStruct((space_mode_extents[1], space_mode_extents[1]), dtype)
+    ad_data_empty = jax.ShapeDtypeStruct((space_mode_extents[1], space_mode_extents[1]), dtype)
     jax.debug.print("Defined elementary operator data buffers.")
-
-    def n_callback(t, args, storage):
-        storage[:] = 0.0
-        module = importlib.import_module(type(storage).__module__)
-        for m in range(storage.shape[0]):
-            for n in range(storage.shape[1]):
-                storage[m, n] = m * n * module.tan(args[0] * t)
-                if storage.dtype.kind == 'c':
-                    storage[m, n] += 1j * m * n / module.tan(args[0] * t)
-
-    def n_grad_callback(t, args, tensor_grad, params_grad):
-        module = importlib.import_module(type(tensor_grad).__module__)
-        for m in range(tensor_grad.shape[0]):
-            for n in range(tensor_grad.shape[1]):
-                params_grad[0] += 2 * (
-                    tensor_grad[m, n] * (m * n * t / module.cos(args[0] * t) ** 2)
-                    ).real
-                if tensor_grad.dtype.kind == 'c':
-                    params_grad[0] += 2 * (
-                        tensor_grad[m, n] * (-1j * m * n * t / module.sin(args[0] * t) ** 2)
-                        ).real
-
-    def a_callback(t, args, storage):
-        storage[:] = 0.0
-        dim = storage.shape[0]
-        for i in range(1, dim):
-            storage[i - 1, i] = math.sqrt(i)
-
-    def ad_callback(t, args, storage):
-        storage[:] = 0.0
-        dim = storage.shape[0]
-        for i in range(1, dim):
-            storage[i, i - 1] = math.sqrt(i)
-
-    n_wrapped_callback = cudm.WrappedTensorCallback(n_callback, cudm.CallbackDevice.GPU)
-    n_wrapped_grad_callback = cudm.WrappedTensorGradientCallback(n_grad_callback, cudm.CallbackDevice.GPU)
-    a_wrapped_callback = cudm.WrappedTensorCallback(a_callback, cudm.CallbackDevice.GPU)
-    ad_wrapped_callback = cudm.WrappedTensorCallback(ad_callback, cudm.CallbackDevice.GPU)
-    jax.debug.print("Defined callbacks for elementary operators.")
 
     # Create elementary operators from the data arrays.
     n_elem_op = ElementaryOperator(n_data_empty, callback=n_wrapped_callback, grad_callback=n_wrapped_grad_callback)

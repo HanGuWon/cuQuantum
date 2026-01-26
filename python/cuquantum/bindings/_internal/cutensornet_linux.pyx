@@ -1,8 +1,8 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# This code was automatically generated across versions from 23.03.0 to 25.11.0. Do not modify it directly.
+# This code was automatically generated across versions from 23.03.0 to 26.01.0. Do not modify it directly.
 
 from libc.stdint cimport intptr_t
 
@@ -200,6 +200,7 @@ cdef void* __cutensornetNetworkSetAdjointTensorMemory = NULL
 cdef void* __cutensornetNetworkContract = NULL
 cdef void* __cutensornetNetworkPrepareGradientsBackward = NULL
 cdef void* __cutensornetNetworkComputeGradientsBackward = NULL
+cdef void* __cutensornetStateApplyDiagonalTensorOperator = NULL
 
 
 cdef void* load_library() except* nogil:
@@ -212,13 +213,15 @@ cdef void* load_library() except* nogil:
     return handle
 
 
-cdef int _check_or_init_cutensornet() except -1 nogil:
+cdef int _init_cutensornet() except -1 nogil:
     global __py_cutensornet_init
-    if __py_cutensornet_init:
-        return 0
 
     cdef void* handle = NULL
     with gil, __symbol_lock:
+        # Check the flag again once the locks are held
+        if __py_cutensornet_init:
+            return 0
+
         # Load function
         global __cutensornetCreate
         __cutensornetCreate = dlsym(RTLD_DEFAULT, 'cutensornetCreate')
@@ -1213,8 +1216,22 @@ cdef int _check_or_init_cutensornet() except -1 nogil:
             if handle == NULL:
                 handle = load_library()
             __cutensornetNetworkComputeGradientsBackward = dlsym(handle, 'cutensornetNetworkComputeGradientsBackward')
+
+        global __cutensornetStateApplyDiagonalTensorOperator
+        __cutensornetStateApplyDiagonalTensorOperator = dlsym(RTLD_DEFAULT, 'cutensornetStateApplyDiagonalTensorOperator')
+        if __cutensornetStateApplyDiagonalTensorOperator == NULL:
+            if handle == NULL:
+                handle = load_library()
+            __cutensornetStateApplyDiagonalTensorOperator = dlsym(handle, 'cutensornetStateApplyDiagonalTensorOperator')
         __py_cutensornet_init = True
         return 0
+
+
+cdef inline int _check_or_init_cutensornet() except -1 nogil:
+    if __py_cutensornet_init:
+        return 0    
+
+    return _init_cutensornet()
 
 
 cpdef dict _inspect_function_pointers():
@@ -1646,6 +1663,9 @@ cpdef dict _inspect_function_pointers():
 
     global __cutensornetNetworkComputeGradientsBackward
     data["__cutensornetNetworkComputeGradientsBackward"] = <intptr_t>__cutensornetNetworkComputeGradientsBackward
+
+    global __cutensornetStateApplyDiagonalTensorOperator
+    data["__cutensornetStateApplyDiagonalTensorOperator"] = <intptr_t>__cutensornetStateApplyDiagonalTensorOperator
 
     return data
 
@@ -3072,3 +3092,13 @@ cdef cutensornetStatus_t _cutensornetNetworkComputeGradientsBackward(const cuten
             raise FunctionNotFoundError("function cutensornetNetworkComputeGradientsBackward is not found")
     return (<cutensornetStatus_t (*)(const cutensornetHandle_t, cutensornetNetworkDescriptor_t, int32_t, const cutensornetWorkspaceDescriptor_t, const cutensornetSliceGroup_t, cudaStream_t) noexcept nogil>__cutensornetNetworkComputeGradientsBackward)(
         handle, networkDesc, accumulateOutput, workDesc, sliceGroup, stream)
+
+
+cdef cutensornetStatus_t _cutensornetStateApplyDiagonalTensorOperator(const cutensornetHandle_t handle, cutensornetState_t tensorNetworkState, int32_t numStateModes, const int32_t* stateModes, void* tensorData, const int64_t* tensorModeStrides, const int32_t immutable, const int32_t adjoint, const int32_t unitary, int64_t* tensorId) except?_CUTENSORNETSTATUS_T_INTERNAL_LOADING_ERROR nogil:
+    global __cutensornetStateApplyDiagonalTensorOperator
+    _check_or_init_cutensornet()
+    if __cutensornetStateApplyDiagonalTensorOperator == NULL:
+        with gil:
+            raise FunctionNotFoundError("function cutensornetStateApplyDiagonalTensorOperator is not found")
+    return (<cutensornetStatus_t (*)(const cutensornetHandle_t, cutensornetState_t, int32_t, const int32_t*, void*, const int64_t*, const int32_t, const int32_t, const int32_t, int64_t*) noexcept nogil>__cutensornetStateApplyDiagonalTensorOperator)(
+        handle, tensorNetworkState, numStateModes, stateModes, tensorData, tensorModeStrides, immutable, adjoint, unitary, tensorId)

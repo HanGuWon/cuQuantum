@@ -1,8 +1,8 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# This code was automatically generated across versions from 23.03.0 to 25.11.0. Do not modify it directly.
+# This code was automatically generated across versions from 23.03.0 to 26.01.0. Do not modify it directly.
 
 from libc.stdint cimport intptr_t
 
@@ -241,3 +241,4 @@ cpdef network_set_adjoint_tensor_memory(intptr_t handle, intptr_t network_desc, 
 cpdef network_contract(intptr_t handle, intptr_t network_desc, int32_t accumulate_output, intptr_t work_desc, intptr_t slice_group, intptr_t stream)
 cpdef network_prepare_gradients_backward(intptr_t handle, intptr_t network_desc, intptr_t work_desc)
 cpdef network_compute_gradients_backward(intptr_t handle, intptr_t network_desc, int32_t accumulate_output, intptr_t work_desc, intptr_t slice_group, intptr_t stream)
+cpdef int64_t state_apply_diagonal_tensor_operator(intptr_t handle, intptr_t tensor_network_state, int32_t num_state_modes, state_modes, intptr_t tensor_data, tensor_mode_strides, int32_t immutable, int32_t adjoint, int32_t unitary) except? -1

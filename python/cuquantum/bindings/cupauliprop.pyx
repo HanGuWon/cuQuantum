@@ -1,8 +1,8 @@
-# Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# This code was automatically generated with version 25.11.0. Do not modify it directly.
+# This code was automatically generated across versions from 25.11.0 to 26.01.0. Do not modify it directly.
 
 cimport cython
 cimport cpython
@@ -19,16 +19,44 @@ import warnings as _warnings
 
 import numpy as _numpy
 
+from libc.stdlib cimport calloc, free, malloc
+from cython cimport view
+cimport cpython.buffer
+cimport cpython.memoryview
+from libc.string cimport memcmp, memcpy
+import numpy as _numpy
+
+
+cdef __from_data(data, dtype_name, expected_dtype, lowpp_type):
+    # _numpy.recarray is a subclass of _numpy.ndarray, so implicitly handled here.
+    if isinstance(data, lowpp_type):
+        return data
+    if not isinstance(data, _numpy.ndarray):
+        raise TypeError("data argument must be a NumPy ndarray")
+    if data.size != 1:
+        raise ValueError("data array must have a size of 1")
+    if data.dtype != expected_dtype:
+        raise ValueError(f"data array must be of dtype {dtype_name}")
+    return lowpp_type.from_ptr(data.ctypes.data, not data.flags.writeable, data)
+
 
 ###############################################################################
 # POD
 ###############################################################################
 
-pauli_term_dtype = _numpy.dtype([
-    ("xzbits", _numpy.intp, ),
-    ("coef", _numpy.intp, ),
-    ], align=True)
+cdef _get_pauli_term_dtype_offsets():
+    cdef cupaulipropPauliTerm_t pod = cupaulipropPauliTerm_t()
+    return _numpy.dtype({
+        'names': ['xzbits', 'coef'],
+        'formats': [_numpy.intp, _numpy.intp],
+        'offsets': [
+            (<intptr_t>&(pod.xzbits)) - (<intptr_t>&pod),
+            (<intptr_t>&(pod.coef)) - (<intptr_t>&pod),
+        ],
+        'itemsize': sizeof(cupaulipropPauliTerm_t),
+    })
 
+pauli_term_dtype = _get_pauli_term_dtype_offsets()
 
 cdef class PauliTerm:
     """Empty-initialize an instance of `cupaulipropPauliTerm_t`.
@@ -37,13 +65,25 @@ cdef class PauliTerm:
     .. seealso:: `cupaulipropPauliTerm_t`
     """
     cdef:
-        readonly object _data
+        cupaulipropPauliTerm_t *_ptr
+        object _owner
+        bint _owned
+        bint _readonly
 
     def __init__(self):
-        arr = _numpy.empty(1, dtype=pauli_term_dtype)
-        self._data = arr.view(_numpy.recarray)
-        assert self._data.itemsize == sizeof(cupaulipropPauliTerm_t), \
-            f"itemsize {self._data.itemsize} mismatches struct size {sizeof(cupaulipropPauliTerm_t)}"
+        self._ptr = <cupaulipropPauliTerm_t *>calloc(1, sizeof(cupaulipropPauliTerm_t))
+        if self._ptr == NULL:
+            raise MemoryError("Error allocating PauliTerm")
+        self._owner = None
+        self._owned = True
+        self._readonly = False
+
+    def __dealloc__(self):
+        cdef cupaulipropPauliTerm_t *ptr
+        if self._owned and self._ptr != NULL:
+            ptr = self._ptr
+            self._ptr = NULL
+            free(ptr)
 
     def __repr__(self):
         return f"<{__name__}.PauliTerm object at {hex(id(self))}>"
@@ -51,85 +91,104 @@ cdef class PauliTerm:
     @property
     def ptr(self):
         """Get the pointer address to the data as Python :class:`int`."""
-        return self._data.ctypes.data
+        return <intptr_t>(self._ptr)
+
+    cdef intptr_t _get_ptr(self):
+        return <intptr_t>(self._ptr)
 
     def __int__(self):
-        return self._data.ctypes.data
+        return <intptr_t>(self._ptr)
 
     def __eq__(self, other):
+        cdef PauliTerm other_
         if not isinstance(other, PauliTerm):
             return False
-        if self._data.size != other._data.size:
-            return False
-        if self._data.dtype != other._data.dtype:
-            return False
-        return bool((self._data == other._data).all())
+        other_ = other
+        return (memcmp(<void *><intptr_t>(self._ptr), <void *><intptr_t>(other_._ptr), sizeof(cupaulipropPauliTerm_t)) == 0)
+
+    def __setitem__(self, key, val):
+        if key == 0 and isinstance(val, _numpy.ndarray):
+            self._ptr = <cupaulipropPauliTerm_t *>malloc(sizeof(cupaulipropPauliTerm_t))
+            if self._ptr == NULL:
+                raise MemoryError("Error allocating PauliTerm")
+            memcpy(<void*>self._ptr, <void*><intptr_t>val.ctypes.data, sizeof(cupaulipropPauliTerm_t))
+            self._owner = None
+            self._owned = True
+            self._readonly = not val.flags.writeable
+        else:
+            setattr(self, key, val)
 
     @property
     def xzbits(self):
         """int: non-owning pointer to the packed X and Z bits arranged as an array of `cupaulipropPackedIntegerType_t`"""
-        return int(self._data.xzbits[0])
+        return <intptr_t>(self._ptr[0].xzbits)
 
     @xzbits.setter
     def xzbits(self, val):
-        self._data.xzbits = val
+        if self._readonly:
+            raise ValueError("This PauliTerm instance is read-only")
+        self._ptr[0].xzbits = <cupaulipropPackedIntegerType_t*><intptr_t>val
 
     @property
     def coef(self):
         """int: non-owning pointer to the coefficient (real/complex float/double)"""
-        return int(self._data.coef[0])
+        return <intptr_t>(self._ptr[0].coef)
 
     @coef.setter
     def coef(self, val):
-        self._data.coef = val
-
-    def __setitem__(self, key, val):
-        self._data[key] = val
+        if self._readonly:
+            raise ValueError("This PauliTerm instance is read-only")
+        self._ptr[0].coef = <void *><intptr_t>val
 
     @staticmethod
     def from_data(data):
         """Create an PauliTerm instance wrapping the given NumPy array.
 
         Args:
-            data (_numpy.ndarray): a 1D array of dtype `pauli_term_dtype` holding the data.
+            data (_numpy.ndarray): a single-element array of dtype `pauli_term_dtype` holding the data.
         """
-        cdef PauliTerm obj = PauliTerm.__new__(PauliTerm)
-        if not isinstance(data, (_numpy.ndarray, _numpy.recarray)):
-            raise TypeError("data argument must be a NumPy ndarray")
-        if data.ndim != 1:
-            raise ValueError("data array must be 1D")
-        if data.dtype != pauli_term_dtype:
-            raise ValueError("data array must be of dtype pauli_term_dtype")
-        obj._data = data.view(_numpy.recarray)
-
-        return obj
+        return __from_data(data, "pauli_term_dtype", pauli_term_dtype, PauliTerm)
 
     @staticmethod
-    def from_ptr(intptr_t ptr, bint readonly=False):
+    def from_ptr(intptr_t ptr, bint readonly=False, object owner=None):
         """Create an PauliTerm instance wrapping the given pointer.
 
         Args:
             ptr (intptr_t): pointer address as Python :class:`int` to the data.
+            owner (object): The Python object that owns the pointer. If not provided, data will be copied.
             readonly (bool): whether the data is read-only (to the user). default is `False`.
         """
         if ptr == 0:
             raise ValueError("ptr must not be null (0)")
         cdef PauliTerm obj = PauliTerm.__new__(PauliTerm)
-        cdef flag = _buffer.PyBUF_READ if readonly else _buffer.PyBUF_WRITE
-        cdef object buf = PyMemoryView_FromMemory(
-            <char*>ptr, sizeof(cupaulipropPauliTerm_t), flag)
-        data = _numpy.ndarray((1,), buffer=buf,
-                              dtype=pauli_term_dtype)
-        obj._data = data.view(_numpy.recarray)
-
+        if owner is None:
+            obj._ptr = <cupaulipropPauliTerm_t *>malloc(sizeof(cupaulipropPauliTerm_t))
+            if obj._ptr == NULL:
+                raise MemoryError("Error allocating PauliTerm")
+            memcpy(<void*>(obj._ptr), <void*>ptr, sizeof(cupaulipropPauliTerm_t))
+            obj._owner = None
+            obj._owned = True
+        else:
+            obj._ptr = <cupaulipropPauliTerm_t *>ptr
+            obj._owner = owner
+            obj._owned = False
+        obj._readonly = readonly
         return obj
 
 
-truncation_strategy_dtype = _numpy.dtype([
-    ("strategy", _numpy.int32, ),
-    ("param_struct", _numpy.intp, ),
-    ], align=True)
+cdef _get_truncation_strategy_dtype_offsets():
+    cdef cupaulipropTruncationStrategy_t pod = cupaulipropTruncationStrategy_t()
+    return _numpy.dtype({
+        'names': ['strategy', 'param_struct'],
+        'formats': [_numpy.int32, _numpy.intp],
+        'offsets': [
+            (<intptr_t>&(pod.strategy)) - (<intptr_t>&pod),
+            (<intptr_t>&(pod.paramStruct)) - (<intptr_t>&pod),
+        ],
+        'itemsize': sizeof(cupaulipropTruncationStrategy_t),
+    })
 
+truncation_strategy_dtype = _get_truncation_strategy_dtype_offsets()
 
 cdef class TruncationStrategy:
     """Empty-initialize an instance of `cupaulipropTruncationStrategy_t`.
@@ -138,13 +197,25 @@ cdef class TruncationStrategy:
     .. seealso:: `cupaulipropTruncationStrategy_t`
     """
     cdef:
-        readonly object _data
+        cupaulipropTruncationStrategy_t *_ptr
+        object _owner
+        bint _owned
+        bint _readonly
 
     def __init__(self):
-        arr = _numpy.empty(1, dtype=truncation_strategy_dtype)
-        self._data = arr.view(_numpy.recarray)
-        assert self._data.itemsize == sizeof(cupaulipropTruncationStrategy_t), \
-            f"itemsize {self._data.itemsize} mismatches struct size {sizeof(cupaulipropTruncationStrategy_t)}"
+        self._ptr = <cupaulipropTruncationStrategy_t *>calloc(1, sizeof(cupaulipropTruncationStrategy_t))
+        if self._ptr == NULL:
+            raise MemoryError("Error allocating TruncationStrategy")
+        self._owner = None
+        self._owned = True
+        self._readonly = False
+
+    def __dealloc__(self):
+        cdef cupaulipropTruncationStrategy_t *ptr
+        if self._owned and self._ptr != NULL:
+            ptr = self._ptr
+            self._ptr = NULL
+            free(ptr)
 
     def __repr__(self):
         return f"<{__name__}.TruncationStrategy object at {hex(id(self))}>"
@@ -152,84 +223,103 @@ cdef class TruncationStrategy:
     @property
     def ptr(self):
         """Get the pointer address to the data as Python :class:`int`."""
-        return self._data.ctypes.data
+        return <intptr_t>(self._ptr)
+
+    cdef intptr_t _get_ptr(self):
+        return <intptr_t>(self._ptr)
 
     def __int__(self):
-        return self._data.ctypes.data
+        return <intptr_t>(self._ptr)
 
     def __eq__(self, other):
+        cdef TruncationStrategy other_
         if not isinstance(other, TruncationStrategy):
             return False
-        if self._data.size != other._data.size:
-            return False
-        if self._data.dtype != other._data.dtype:
-            return False
-        return bool((self._data == other._data).all())
+        other_ = other
+        return (memcmp(<void *><intptr_t>(self._ptr), <void *><intptr_t>(other_._ptr), sizeof(cupaulipropTruncationStrategy_t)) == 0)
+
+    def __setitem__(self, key, val):
+        if key == 0 and isinstance(val, _numpy.ndarray):
+            self._ptr = <cupaulipropTruncationStrategy_t *>malloc(sizeof(cupaulipropTruncationStrategy_t))
+            if self._ptr == NULL:
+                raise MemoryError("Error allocating TruncationStrategy")
+            memcpy(<void*>self._ptr, <void*><intptr_t>val.ctypes.data, sizeof(cupaulipropTruncationStrategy_t))
+            self._owner = None
+            self._owned = True
+            self._readonly = not val.flags.writeable
+        else:
+            setattr(self, key, val)
 
     @property
     def strategy(self):
         """int: which kind of truncation strategy to apply"""
-        return int(self._data.strategy[0])
+        return <int>(self._ptr[0].strategy)
 
     @strategy.setter
     def strategy(self, val):
-        self._data.strategy = val
+        if self._readonly:
+            raise ValueError("This TruncationStrategy instance is read-only")
+        self._ptr[0].strategy = <cupaulipropTruncationStrategyKind_t><int>val
 
     @property
     def param_struct(self):
         """int: pointer to the parameter structure for the truncation strategy"""
-        return int(self._data.param_struct[0])
+        return <intptr_t>(self._ptr[0].paramStruct)
 
     @param_struct.setter
     def param_struct(self, val):
-        self._data.param_struct = val
-
-    def __setitem__(self, key, val):
-        self._data[key] = val
+        if self._readonly:
+            raise ValueError("This TruncationStrategy instance is read-only")
+        self._ptr[0].paramStruct = <void *><intptr_t>val
 
     @staticmethod
     def from_data(data):
         """Create an TruncationStrategy instance wrapping the given NumPy array.
 
         Args:
-            data (_numpy.ndarray): a 1D array of dtype `truncation_strategy_dtype` holding the data.
+            data (_numpy.ndarray): a single-element array of dtype `truncation_strategy_dtype` holding the data.
         """
-        cdef TruncationStrategy obj = TruncationStrategy.__new__(TruncationStrategy)
-        if not isinstance(data, (_numpy.ndarray, _numpy.recarray)):
-            raise TypeError("data argument must be a NumPy ndarray")
-        if data.ndim != 1:
-            raise ValueError("data array must be 1D")
-        if data.dtype != truncation_strategy_dtype:
-            raise ValueError("data array must be of dtype truncation_strategy_dtype")
-        obj._data = data.view(_numpy.recarray)
-
-        return obj
+        return __from_data(data, "truncation_strategy_dtype", truncation_strategy_dtype, TruncationStrategy)
 
     @staticmethod
-    def from_ptr(intptr_t ptr, bint readonly=False):
+    def from_ptr(intptr_t ptr, bint readonly=False, object owner=None):
         """Create an TruncationStrategy instance wrapping the given pointer.
 
         Args:
             ptr (intptr_t): pointer address as Python :class:`int` to the data.
+            owner (object): The Python object that owns the pointer. If not provided, data will be copied.
             readonly (bool): whether the data is read-only (to the user). default is `False`.
         """
         if ptr == 0:
             raise ValueError("ptr must not be null (0)")
         cdef TruncationStrategy obj = TruncationStrategy.__new__(TruncationStrategy)
-        cdef flag = _buffer.PyBUF_READ if readonly else _buffer.PyBUF_WRITE
-        cdef object buf = PyMemoryView_FromMemory(
-            <char*>ptr, sizeof(cupaulipropTruncationStrategy_t), flag)
-        data = _numpy.ndarray((1,), buffer=buf,
-                              dtype=truncation_strategy_dtype)
-        obj._data = data.view(_numpy.recarray)
-
+        if owner is None:
+            obj._ptr = <cupaulipropTruncationStrategy_t *>malloc(sizeof(cupaulipropTruncationStrategy_t))
+            if obj._ptr == NULL:
+                raise MemoryError("Error allocating TruncationStrategy")
+            memcpy(<void*>(obj._ptr), <void*>ptr, sizeof(cupaulipropTruncationStrategy_t))
+            obj._owner = None
+            obj._owned = True
+        else:
+            obj._ptr = <cupaulipropTruncationStrategy_t *>ptr
+            obj._owner = owner
+            obj._owned = False
+        obj._readonly = readonly
         return obj
 
 
-coefficient_truncation_params_dtype = _numpy.dtype([
-    ("cutoff", _numpy.float64, ),
-    ], align=True)
+cdef _get_coefficient_truncation_params_dtype_offsets():
+    cdef cupaulipropCoefficientTruncationParams_t pod = cupaulipropCoefficientTruncationParams_t()
+    return _numpy.dtype({
+        'names': ['cutoff'],
+        'formats': [_numpy.float64],
+        'offsets': [
+            (<intptr_t>&(pod.cutoff)) - (<intptr_t>&pod),
+        ],
+        'itemsize': sizeof(cupaulipropCoefficientTruncationParams_t),
+    })
 
+coefficient_truncation_params_dtype = _get_coefficient_truncation_params_dtype_offsets()
 
 cdef class CoefficientTruncationParams:
     """Empty-initialize an instance of `cupaulipropCoefficientTruncationParams_t`.
@@ -238,13 +328,25 @@ cdef class CoefficientTruncationParams:
     .. seealso:: `cupaulipropCoefficientTruncationParams_t`
     """
     cdef:
-        readonly object _data
+        cupaulipropCoefficientTruncationParams_t *_ptr
+        object _owner
+        bint _owned
+        bint _readonly
 
     def __init__(self):
-        arr = _numpy.empty(1, dtype=coefficient_truncation_params_dtype)
-        self._data = arr.view(_numpy.recarray)
-        assert self._data.itemsize == sizeof(cupaulipropCoefficientTruncationParams_t), \
-            f"itemsize {self._data.itemsize} mismatches struct size {sizeof(cupaulipropCoefficientTruncationParams_t)}"
+        self._ptr = <cupaulipropCoefficientTruncationParams_t *>calloc(1, sizeof(cupaulipropCoefficientTruncationParams_t))
+        if self._ptr == NULL:
+            raise MemoryError("Error allocating CoefficientTruncationParams")
+        self._owner = None
+        self._owned = True
+        self._readonly = False
+
+    def __dealloc__(self):
+        cdef cupaulipropCoefficientTruncationParams_t *ptr
+        if self._owned and self._ptr != NULL:
+            ptr = self._ptr
+            self._ptr = NULL
+            free(ptr)
 
     def __repr__(self):
         return f"<{__name__}.CoefficientTruncationParams object at {hex(id(self))}>"
@@ -252,75 +354,92 @@ cdef class CoefficientTruncationParams:
     @property
     def ptr(self):
         """Get the pointer address to the data as Python :class:`int`."""
-        return self._data.ctypes.data
+        return <intptr_t>(self._ptr)
+
+    cdef intptr_t _get_ptr(self):
+        return <intptr_t>(self._ptr)
 
     def __int__(self):
-        return self._data.ctypes.data
+        return <intptr_t>(self._ptr)
 
     def __eq__(self, other):
+        cdef CoefficientTruncationParams other_
         if not isinstance(other, CoefficientTruncationParams):
             return False
-        if self._data.size != other._data.size:
-            return False
-        if self._data.dtype != other._data.dtype:
-            return False
-        return bool((self._data == other._data).all())
+        other_ = other
+        return (memcmp(<void *><intptr_t>(self._ptr), <void *><intptr_t>(other_._ptr), sizeof(cupaulipropCoefficientTruncationParams_t)) == 0)
+
+    def __setitem__(self, key, val):
+        if key == 0 and isinstance(val, _numpy.ndarray):
+            self._ptr = <cupaulipropCoefficientTruncationParams_t *>malloc(sizeof(cupaulipropCoefficientTruncationParams_t))
+            if self._ptr == NULL:
+                raise MemoryError("Error allocating CoefficientTruncationParams")
+            memcpy(<void*>self._ptr, <void*><intptr_t>val.ctypes.data, sizeof(cupaulipropCoefficientTruncationParams_t))
+            self._owner = None
+            self._owned = True
+            self._readonly = not val.flags.writeable
+        else:
+            setattr(self, key, val)
 
     @property
     def cutoff(self):
         """float: cutoff value for the magnitude of the Pauli term's coefficient"""
-        return float(self._data.cutoff[0])
+        return self._ptr[0].cutoff
 
     @cutoff.setter
     def cutoff(self, val):
-        self._data.cutoff = val
-
-    def __setitem__(self, key, val):
-        self._data[key] = val
+        if self._readonly:
+            raise ValueError("This CoefficientTruncationParams instance is read-only")
+        self._ptr[0].cutoff = val
 
     @staticmethod
     def from_data(data):
         """Create an CoefficientTruncationParams instance wrapping the given NumPy array.
 
         Args:
-            data (_numpy.ndarray): a 1D array of dtype `coefficient_truncation_params_dtype` holding the data.
+            data (_numpy.ndarray): a single-element array of dtype `coefficient_truncation_params_dtype` holding the data.
         """
-        cdef CoefficientTruncationParams obj = CoefficientTruncationParams.__new__(CoefficientTruncationParams)
-        if not isinstance(data, (_numpy.ndarray, _numpy.recarray)):
-            raise TypeError("data argument must be a NumPy ndarray")
-        if data.ndim != 1:
-            raise ValueError("data array must be 1D")
-        if data.dtype != coefficient_truncation_params_dtype:
-            raise ValueError("data array must be of dtype coefficient_truncation_params_dtype")
-        obj._data = data.view(_numpy.recarray)
-
-        return obj
+        return __from_data(data, "coefficient_truncation_params_dtype", coefficient_truncation_params_dtype, CoefficientTruncationParams)
 
     @staticmethod
-    def from_ptr(intptr_t ptr, bint readonly=False):
+    def from_ptr(intptr_t ptr, bint readonly=False, object owner=None):
         """Create an CoefficientTruncationParams instance wrapping the given pointer.
 
         Args:
             ptr (intptr_t): pointer address as Python :class:`int` to the data.
+            owner (object): The Python object that owns the pointer. If not provided, data will be copied.
             readonly (bool): whether the data is read-only (to the user). default is `False`.
         """
         if ptr == 0:
             raise ValueError("ptr must not be null (0)")
         cdef CoefficientTruncationParams obj = CoefficientTruncationParams.__new__(CoefficientTruncationParams)
-        cdef flag = _buffer.PyBUF_READ if readonly else _buffer.PyBUF_WRITE
-        cdef object buf = PyMemoryView_FromMemory(
-            <char*>ptr, sizeof(cupaulipropCoefficientTruncationParams_t), flag)
-        data = _numpy.ndarray((1,), buffer=buf,
-                              dtype=coefficient_truncation_params_dtype)
-        obj._data = data.view(_numpy.recarray)
-
+        if owner is None:
+            obj._ptr = <cupaulipropCoefficientTruncationParams_t *>malloc(sizeof(cupaulipropCoefficientTruncationParams_t))
+            if obj._ptr == NULL:
+                raise MemoryError("Error allocating CoefficientTruncationParams")
+            memcpy(<void*>(obj._ptr), <void*>ptr, sizeof(cupaulipropCoefficientTruncationParams_t))
+            obj._owner = None
+            obj._owned = True
+        else:
+            obj._ptr = <cupaulipropCoefficientTruncationParams_t *>ptr
+            obj._owner = owner
+            obj._owned = False
+        obj._readonly = readonly
         return obj
 
 
-pauli_weight_truncation_params_dtype = _numpy.dtype([
-    ("cutoff", _numpy.int32, ),
-    ], align=True)
+cdef _get_pauli_weight_truncation_params_dtype_offsets():
+    cdef cupaulipropPauliWeightTruncationParams_t pod = cupaulipropPauliWeightTruncationParams_t()
+    return _numpy.dtype({
+        'names': ['cutoff'],
+        'formats': [_numpy.int32],
+        'offsets': [
+            (<intptr_t>&(pod.cutoff)) - (<intptr_t>&pod),
+        ],
+        'itemsize': sizeof(cupaulipropPauliWeightTruncationParams_t),
+    })
 
+pauli_weight_truncation_params_dtype = _get_pauli_weight_truncation_params_dtype_offsets()
 
 cdef class PauliWeightTruncationParams:
     """Empty-initialize an instance of `cupaulipropPauliWeightTruncationParams_t`.
@@ -329,13 +448,25 @@ cdef class PauliWeightTruncationParams:
     .. seealso:: `cupaulipropPauliWeightTruncationParams_t`
     """
     cdef:
-        readonly object _data
+        cupaulipropPauliWeightTruncationParams_t *_ptr
+        object _owner
+        bint _owned
+        bint _readonly
 
     def __init__(self):
-        arr = _numpy.empty(1, dtype=pauli_weight_truncation_params_dtype)
-        self._data = arr.view(_numpy.recarray)
-        assert self._data.itemsize == sizeof(cupaulipropPauliWeightTruncationParams_t), \
-            f"itemsize {self._data.itemsize} mismatches struct size {sizeof(cupaulipropPauliWeightTruncationParams_t)}"
+        self._ptr = <cupaulipropPauliWeightTruncationParams_t *>calloc(1, sizeof(cupaulipropPauliWeightTruncationParams_t))
+        if self._ptr == NULL:
+            raise MemoryError("Error allocating PauliWeightTruncationParams")
+        self._owner = None
+        self._owned = True
+        self._readonly = False
+
+    def __dealloc__(self):
+        cdef cupaulipropPauliWeightTruncationParams_t *ptr
+        if self._owned and self._ptr != NULL:
+            ptr = self._ptr
+            self._ptr = NULL
+            free(ptr)
 
     def __repr__(self):
         return f"<{__name__}.PauliWeightTruncationParams object at {hex(id(self))}>"
@@ -343,68 +474,77 @@ cdef class PauliWeightTruncationParams:
     @property
     def ptr(self):
         """Get the pointer address to the data as Python :class:`int`."""
-        return self._data.ctypes.data
+        return <intptr_t>(self._ptr)
+
+    cdef intptr_t _get_ptr(self):
+        return <intptr_t>(self._ptr)
 
     def __int__(self):
-        return self._data.ctypes.data
+        return <intptr_t>(self._ptr)
 
     def __eq__(self, other):
+        cdef PauliWeightTruncationParams other_
         if not isinstance(other, PauliWeightTruncationParams):
             return False
-        if self._data.size != other._data.size:
-            return False
-        if self._data.dtype != other._data.dtype:
-            return False
-        return bool((self._data == other._data).all())
+        other_ = other
+        return (memcmp(<void *><intptr_t>(self._ptr), <void *><intptr_t>(other_._ptr), sizeof(cupaulipropPauliWeightTruncationParams_t)) == 0)
+
+    def __setitem__(self, key, val):
+        if key == 0 and isinstance(val, _numpy.ndarray):
+            self._ptr = <cupaulipropPauliWeightTruncationParams_t *>malloc(sizeof(cupaulipropPauliWeightTruncationParams_t))
+            if self._ptr == NULL:
+                raise MemoryError("Error allocating PauliWeightTruncationParams")
+            memcpy(<void*>self._ptr, <void*><intptr_t>val.ctypes.data, sizeof(cupaulipropPauliWeightTruncationParams_t))
+            self._owner = None
+            self._owned = True
+            self._readonly = not val.flags.writeable
+        else:
+            setattr(self, key, val)
 
     @property
     def cutoff(self):
         """int: cutoff value for the number of non-identity Paulis in the Pauli string"""
-        return int(self._data.cutoff[0])
+        return self._ptr[0].cutoff
 
     @cutoff.setter
     def cutoff(self, val):
-        self._data.cutoff = val
-
-    def __setitem__(self, key, val):
-        self._data[key] = val
+        if self._readonly:
+            raise ValueError("This PauliWeightTruncationParams instance is read-only")
+        self._ptr[0].cutoff = val
 
     @staticmethod
     def from_data(data):
         """Create an PauliWeightTruncationParams instance wrapping the given NumPy array.
 
         Args:
-            data (_numpy.ndarray): a 1D array of dtype `pauli_weight_truncation_params_dtype` holding the data.
+            data (_numpy.ndarray): a single-element array of dtype `pauli_weight_truncation_params_dtype` holding the data.
         """
-        cdef PauliWeightTruncationParams obj = PauliWeightTruncationParams.__new__(PauliWeightTruncationParams)
-        if not isinstance(data, (_numpy.ndarray, _numpy.recarray)):
-            raise TypeError("data argument must be a NumPy ndarray")
-        if data.ndim != 1:
-            raise ValueError("data array must be 1D")
-        if data.dtype != pauli_weight_truncation_params_dtype:
-            raise ValueError("data array must be of dtype pauli_weight_truncation_params_dtype")
-        obj._data = data.view(_numpy.recarray)
-
-        return obj
+        return __from_data(data, "pauli_weight_truncation_params_dtype", pauli_weight_truncation_params_dtype, PauliWeightTruncationParams)
 
     @staticmethod
-    def from_ptr(intptr_t ptr, bint readonly=False):
+    def from_ptr(intptr_t ptr, bint readonly=False, object owner=None):
         """Create an PauliWeightTruncationParams instance wrapping the given pointer.
 
         Args:
             ptr (intptr_t): pointer address as Python :class:`int` to the data.
+            owner (object): The Python object that owns the pointer. If not provided, data will be copied.
             readonly (bool): whether the data is read-only (to the user). default is `False`.
         """
         if ptr == 0:
             raise ValueError("ptr must not be null (0)")
         cdef PauliWeightTruncationParams obj = PauliWeightTruncationParams.__new__(PauliWeightTruncationParams)
-        cdef flag = _buffer.PyBUF_READ if readonly else _buffer.PyBUF_WRITE
-        cdef object buf = PyMemoryView_FromMemory(
-            <char*>ptr, sizeof(cupaulipropPauliWeightTruncationParams_t), flag)
-        data = _numpy.ndarray((1,), buffer=buf,
-                              dtype=pauli_weight_truncation_params_dtype)
-        obj._data = data.view(_numpy.recarray)
-
+        if owner is None:
+            obj._ptr = <cupaulipropPauliWeightTruncationParams_t *>malloc(sizeof(cupaulipropPauliWeightTruncationParams_t))
+            if obj._ptr == NULL:
+                raise MemoryError("Error allocating PauliWeightTruncationParams")
+            memcpy(<void*>(obj._ptr), <void*>ptr, sizeof(cupaulipropPauliWeightTruncationParams_t))
+            obj._owner = None
+            obj._owned = True
+        else:
+            obj._ptr = <cupaulipropPauliWeightTruncationParams_t *>ptr
+            obj._owner = owner
+            obj._owned = False
+        obj._readonly = readonly
         return obj
 
 
@@ -446,31 +586,37 @@ class PauliKind(_IntEnum):
     """See `cupaulipropPauliKind_t`."""
     PAULI_I = CUPAULIPROP_PAULI_I
     PAULI_X = CUPAULIPROP_PAULI_X
-    PAULI_Z = CUPAULIPROP_PAULI_Z
     PAULI_Y = CUPAULIPROP_PAULI_Y
+    PAULI_Z = CUPAULIPROP_PAULI_Z
 
 class CliffordGateKind(_IntEnum):
     """See `cupaulipropCliffordGateKind_t`."""
     CLIFFORD_GATE_I = CUPAULIPROP_CLIFFORD_GATE_I
     CLIFFORD_GATE_X = CUPAULIPROP_CLIFFORD_GATE_X
-    CLIFFORD_GATE_Z = CUPAULIPROP_CLIFFORD_GATE_Z
     CLIFFORD_GATE_Y = CUPAULIPROP_CLIFFORD_GATE_Y
+    CLIFFORD_GATE_Z = CUPAULIPROP_CLIFFORD_GATE_Z
     CLIFFORD_GATE_H = CUPAULIPROP_CLIFFORD_GATE_H
     CLIFFORD_GATE_S = CUPAULIPROP_CLIFFORD_GATE_S
     CLIFFORD_GATE_CX = CUPAULIPROP_CLIFFORD_GATE_CX
-    CLIFFORD_GATE_CZ = CUPAULIPROP_CLIFFORD_GATE_CZ
     CLIFFORD_GATE_CY = CUPAULIPROP_CLIFFORD_GATE_CY
+    CLIFFORD_GATE_CZ = CUPAULIPROP_CLIFFORD_GATE_CZ
     CLIFFORD_GATE_SWAP = CUPAULIPROP_CLIFFORD_GATE_SWAP
     CLIFFORD_GATE_ISWAP = CUPAULIPROP_CLIFFORD_GATE_ISWAP
     CLIFFORD_GATE_SQRTX = CUPAULIPROP_CLIFFORD_GATE_SQRTX
-    CLIFFORD_GATE_SQRTZ = CUPAULIPROP_CLIFFORD_GATE_SQRTZ
     CLIFFORD_GATE_SQRTY = CUPAULIPROP_CLIFFORD_GATE_SQRTY
+    CLIFFORD_GATE_SQRTZ = CUPAULIPROP_CLIFFORD_GATE_SQRTZ
 
 class QuantumOperatorKind(_IntEnum):
     """See `cupaulipropQuantumOperatorKind_t`."""
     EXPANSION_KIND_PAULI_ROTATION_GATE = CUPAULIPROP_EXPANSION_KIND_PAULI_ROTATION_GATE
     EXPANSION_KIND_CLIFFORD_GATE = CUPAULIPROP_EXPANSION_KIND_CLIFFORD_GATE
     EXPANSION_KIND_PAULI_NOISE_CHANNEL = CUPAULIPROP_EXPANSION_KIND_PAULI_NOISE_CHANNEL
+
+class SortOrder(_IntEnum):
+    """See `cupaulipropSortOrder_t`."""
+    NONE = CUPAULIPROP_SORT_ORDER_NONE
+    INTERNAL = CUPAULIPROP_SORT_ORDER_INTERNAL
+    LITTLE_ENDIAN_BITWISE = CUPAULIPROP_SORT_ORDER_LITTLE_ENDIAN_BITWISE
 
 
 ###############################################################################
@@ -537,8 +683,8 @@ cpdef int32_t get_num_packed_integers(int32_t num_qubits) except? -1:
     """
     cdef int32_t num_packed_integers
     with nogil:
-        status = cupaulipropGetNumPackedIntegers(num_qubits, &num_packed_integers)
-    check_status(status)
+        __status__ = cupaulipropGetNumPackedIntegers(num_qubits, &num_packed_integers)
+    check_status(__status__)
     return num_packed_integers
 
 
@@ -552,8 +698,8 @@ cpdef intptr_t create() except? 0:
     """
     cdef Handle handle
     with nogil:
-        status = cupaulipropCreate(&handle)
-    check_status(status)
+        __status__ = cupaulipropCreate(&handle)
+    check_status(__status__)
     return <intptr_t>handle
 
 
@@ -566,28 +712,8 @@ cpdef destroy(intptr_t handle):
     .. seealso:: `cupaulipropDestroy`
     """
     with nogil:
-        status = cupaulipropDestroy(<Handle>handle)
-    check_status(status)
-
-
-cpdef set_stream(intptr_t handle, stream):
-    """Sets the CUDA stream to be used for library operations.
-
-    Args:
-        handle (intptr_t): Library handle.
-        stream (object): CUDA stream to be used for library operations. It can be:
-
-            - an :class:`int` as the pointer address to the array, or
-            - a Python sequence of ``intptr_t``.
-
-
-    .. seealso:: `cupaulipropSetStream`
-    """
-    cdef nullable_unique_ptr[ vector[intptr_t] ] _stream_
-    get_resource_ptr[intptr_t](_stream_, stream, <intptr_t*>NULL)
-    with nogil:
-        status = cupaulipropSetStream(<Handle>handle, <Stream>(_stream_.data()))
-    check_status(status)
+        __status__ = cupaulipropDestroy(<Handle>handle)
+    check_status(__status__)
 
 
 cpdef intptr_t create_workspace_descriptor(intptr_t handle) except? 0:
@@ -603,8 +729,8 @@ cpdef intptr_t create_workspace_descriptor(intptr_t handle) except? 0:
     """
     cdef WorkspaceDescriptor workspace_desc
     with nogil:
-        status = cupaulipropCreateWorkspaceDescriptor(<Handle>handle, &workspace_desc)
-    check_status(status)
+        __status__ = cupaulipropCreateWorkspaceDescriptor(<Handle>handle, &workspace_desc)
+    check_status(__status__)
     return <intptr_t>workspace_desc
 
 
@@ -617,8 +743,8 @@ cpdef destroy_workspace_descriptor(intptr_t workspace_desc):
     .. seealso:: `cupaulipropDestroyWorkspaceDescriptor`
     """
     with nogil:
-        status = cupaulipropDestroyWorkspaceDescriptor(<WorkspaceDescriptor>workspace_desc)
-    check_status(status)
+        __status__ = cupaulipropDestroyWorkspaceDescriptor(<WorkspaceDescriptor>workspace_desc)
+    check_status(__status__)
 
 
 cpdef int64_t workspace_get_memory_size(intptr_t handle, intptr_t workspace_desc, int mem_space, int workspace_kind) except? -1:
@@ -637,8 +763,8 @@ cpdef int64_t workspace_get_memory_size(intptr_t handle, intptr_t workspace_desc
     """
     cdef int64_t memory_buffer_size
     with nogil:
-        status = cupaulipropWorkspaceGetMemorySize(<const Handle>handle, <const WorkspaceDescriptor>workspace_desc, <_Memspace>mem_space, <_WorkspaceKind>workspace_kind, &memory_buffer_size)
-    check_status(status)
+        __status__ = cupaulipropWorkspaceGetMemorySize(<const Handle>handle, <const WorkspaceDescriptor>workspace_desc, <_Memspace>mem_space, <_WorkspaceKind>workspace_kind, &memory_buffer_size)
+    check_status(__status__)
     return memory_buffer_size
 
 
@@ -656,8 +782,8 @@ cpdef workspace_set_memory(intptr_t handle, intptr_t workspace_desc, int mem_spa
     .. seealso:: `cupaulipropWorkspaceSetMemory`
     """
     with nogil:
-        status = cupaulipropWorkspaceSetMemory(<const Handle>handle, <WorkspaceDescriptor>workspace_desc, <_Memspace>mem_space, <_WorkspaceKind>workspace_kind, <void*>memory_buffer, memory_buffer_size)
-    check_status(status)
+        __status__ = cupaulipropWorkspaceSetMemory(<const Handle>handle, <WorkspaceDescriptor>workspace_desc, <_Memspace>mem_space, <_WorkspaceKind>workspace_kind, <void*>memory_buffer, memory_buffer_size)
+    check_status(__status__)
 
 
 cpdef tuple workspace_get_memory(intptr_t handle, intptr_t workspace_descr, int mem_space, int workspace_kind):
@@ -680,12 +806,12 @@ cpdef tuple workspace_get_memory(intptr_t handle, intptr_t workspace_descr, int 
     cdef void* memory_buffer
     cdef int64_t memory_buffer_size
     with nogil:
-        status = cupaulipropWorkspaceGetMemory(<const Handle>handle, <const WorkspaceDescriptor>workspace_descr, <_Memspace>mem_space, <_WorkspaceKind>workspace_kind, &memory_buffer, &memory_buffer_size)
-    check_status(status)
+        __status__ = cupaulipropWorkspaceGetMemory(<const Handle>handle, <const WorkspaceDescriptor>workspace_descr, <_Memspace>mem_space, <_WorkspaceKind>workspace_kind, &memory_buffer, &memory_buffer_size)
+    check_status(__status__)
     return (<intptr_t>memory_buffer, memory_buffer_size)
 
 
-cpdef intptr_t create_pauli_expansion(intptr_t handle, int32_t num_qubits, intptr_t xz_bits_buffer, int64_t xz_bits_buffer_size, intptr_t coef_buffer, int64_t coef_buffer_size, int data_type, int64_t num_terms, int32_t is_sorted, int32_t has_duplicates) except? 0:
+cpdef intptr_t create_pauli_expansion(intptr_t handle, int32_t num_qubits, intptr_t xz_bits_buffer, int64_t xz_bits_buffer_size, intptr_t coef_buffer, int64_t coef_buffer_size, int data_type, int64_t num_terms, int sort_order, int32_t has_duplicates) except? 0:
     """Creates a Pauli operator expansion.
 
     Args:
@@ -697,7 +823,7 @@ cpdef intptr_t create_pauli_expansion(intptr_t handle, int32_t num_qubits, intpt
         coef_buffer_size (int64_t): Size (in bytes) of the provided memory buffer for storing the coefficients.
         data_type (int): Data type of the coefficients in the Pauli operator expansion.
         num_terms (int64_t): Number of the Pauli operator terms stored in the provided memory buffer (the first ``num_terms`` components define the current Pauli operator expansion).
-        is_sorted (int32_t): Whether or not the Pauli expansion is sorted. A sorted expansion has its Pauli operator terms sorted by the X and Z bits in ascending order (interpreted as big integers in little-endian representation).
+        sort_order (SortOrder): Sort order of the expansion. Use ``CUPAULIPROP_SORT_ORDER_NONE`` for unsorted expansions.
         has_duplicates (int32_t): Whether or not there are duplicates in the expansion, i.e. several terms with identical X and Z bits.
 
     Returns:
@@ -707,8 +833,8 @@ cpdef intptr_t create_pauli_expansion(intptr_t handle, int32_t num_qubits, intpt
     """
     cdef PauliExpansion pauli_expansion
     with nogil:
-        status = cupaulipropCreatePauliExpansion(<const Handle>handle, num_qubits, <void*>xz_bits_buffer, xz_bits_buffer_size, <void*>coef_buffer, coef_buffer_size, <DataType>data_type, num_terms, is_sorted, has_duplicates, &pauli_expansion)
-    check_status(status)
+        __status__ = cupaulipropCreatePauliExpansion(<const Handle>handle, num_qubits, <void*>xz_bits_buffer, xz_bits_buffer_size, <void*>coef_buffer, coef_buffer_size, <DataType>data_type, num_terms, <_SortOrder>sort_order, has_duplicates, &pauli_expansion)
+    check_status(__status__)
     return <intptr_t>pauli_expansion
 
 
@@ -721,8 +847,8 @@ cpdef destroy_pauli_expansion(intptr_t pauli_expansion):
     .. seealso:: `cupaulipropDestroyPauliExpansion`
     """
     with nogil:
-        status = cupaulipropDestroyPauliExpansion(<PauliExpansion>pauli_expansion)
-    check_status(status)
+        __status__ = cupaulipropDestroyPauliExpansion(<PauliExpansion>pauli_expansion)
+    check_status(__status__)
 
 
 cpdef tuple pauli_expansion_get_storage_buffer(intptr_t handle, intptr_t pauli_expansion):
@@ -751,8 +877,8 @@ cpdef tuple pauli_expansion_get_storage_buffer(intptr_t handle, intptr_t pauli_e
     cdef int64_t num_terms
     cdef _Memspace location
     with nogil:
-        status = cupaulipropPauliExpansionGetStorageBuffer(<const Handle>handle, <const PauliExpansion>pauli_expansion, &xz_bits_buffer, &xz_bits_buffer_size, &coef_buffer, &coef_buffer_size, &num_terms, &location)
-    check_status(status)
+        __status__ = cupaulipropPauliExpansionGetStorageBuffer(<const Handle>handle, <const PauliExpansion>pauli_expansion, &xz_bits_buffer, &xz_bits_buffer_size, &coef_buffer, &coef_buffer_size, &num_terms, &location)
+    check_status(__status__)
     return (<intptr_t>xz_bits_buffer, xz_bits_buffer_size, <intptr_t>coef_buffer, coef_buffer_size, num_terms, <int>location)
 
 
@@ -770,8 +896,8 @@ cpdef int32_t pauli_expansion_get_num_qubits(intptr_t handle, intptr_t pauli_exp
     """
     cdef int32_t num_qubits
     with nogil:
-        status = cupaulipropPauliExpansionGetNumQubits(<const Handle>handle, <const PauliExpansion>pauli_expansion, &num_qubits)
-    check_status(status)
+        __status__ = cupaulipropPauliExpansionGetNumQubits(<const Handle>handle, <const PauliExpansion>pauli_expansion, &num_qubits)
+    check_status(__status__)
     return num_qubits
 
 
@@ -789,8 +915,8 @@ cpdef int64_t pauli_expansion_get_num_terms(intptr_t handle, intptr_t pauli_expa
     """
     cdef int64_t num_terms
     with nogil:
-        status = cupaulipropPauliExpansionGetNumTerms(<const Handle>handle, <const PauliExpansion>pauli_expansion, &num_terms)
-    check_status(status)
+        __status__ = cupaulipropPauliExpansionGetNumTerms(<const Handle>handle, <const PauliExpansion>pauli_expansion, &num_terms)
+    check_status(__status__)
     return num_terms
 
 
@@ -808,28 +934,9 @@ cpdef int pauli_expansion_get_data_type(intptr_t handle, intptr_t pauli_expansio
     """
     cdef DataType data_type
     with nogil:
-        status = cupaulipropPauliExpansionGetDataType(<const Handle>handle, <const PauliExpansion>pauli_expansion, &data_type)
-    check_status(status)
+        __status__ = cupaulipropPauliExpansionGetDataType(<const Handle>handle, <const PauliExpansion>pauli_expansion, &data_type)
+    check_status(__status__)
     return <int>data_type
-
-
-cpdef int32_t pauli_expansion_is_sorted(intptr_t handle, intptr_t pauli_expansion) except? -1:
-    """Queries whether a Pauli operator expansion is sorted or not.
-
-    Args:
-        handle (intptr_t): Library handle.
-        pauli_expansion (intptr_t): Pauli operator expansion.
-
-    Returns:
-        int32_t: Indicating whether the Pauli operator expansion is sorted. Sortedness is defined as the Pauli strings being sorted in ascending order according to the little-endian representation of the big integers formed by the X and Z bits. True (!= 0) if the Pauli operator expansion is sorted, false (0) otherwise.
-
-    .. seealso:: `cupaulipropPauliExpansionIsSorted`
-    """
-    cdef int32_t is_sorted
-    with nogil:
-        status = cupaulipropPauliExpansionIsSorted(<const Handle>handle, <const PauliExpansion>pauli_expansion, &is_sorted)
-    check_status(status)
-    return is_sorted
 
 
 cpdef int32_t pauli_expansion_is_deduplicated(intptr_t handle, intptr_t pauli_expansion) except? -1:
@@ -846,8 +953,8 @@ cpdef int32_t pauli_expansion_is_deduplicated(intptr_t handle, intptr_t pauli_ex
     """
     cdef int32_t is_deduplicated
     with nogil:
-        status = cupaulipropPauliExpansionIsDeduplicated(<const Handle>handle, <const PauliExpansion>pauli_expansion, &is_deduplicated)
-    check_status(status)
+        __status__ = cupaulipropPauliExpansionIsDeduplicated(<const Handle>handle, <const PauliExpansion>pauli_expansion, &is_deduplicated)
+    check_status(__status__)
     return is_deduplicated
 
 
@@ -867,8 +974,8 @@ cpdef intptr_t pauli_expansion_get_contiguous_range(intptr_t handle, intptr_t pa
     """
     cdef PauliExpansionView view
     with nogil:
-        status = cupaulipropPauliExpansionGetContiguousRange(<const Handle>handle, <const PauliExpansion>pauli_expansion, start_ind_ex, end_ind_ex, &view)
-    check_status(status)
+        __status__ = cupaulipropPauliExpansionGetContiguousRange(<const Handle>handle, <const PauliExpansion>pauli_expansion, start_ind_ex, end_ind_ex, &view)
+    check_status(__status__)
     return <intptr_t>view
 
 
@@ -881,8 +988,8 @@ cpdef destroy_pauli_expansion_view(intptr_t view):
     .. seealso:: `cupaulipropDestroyPauliExpansionView`
     """
     with nogil:
-        status = cupaulipropDestroyPauliExpansionView(<PauliExpansionView>view)
-    check_status(status)
+        __status__ = cupaulipropDestroyPauliExpansionView(<PauliExpansionView>view)
+    check_status(__status__)
 
 
 cpdef int64_t pauli_expansion_view_get_num_terms(intptr_t handle, intptr_t view) except? -1:
@@ -899,8 +1006,8 @@ cpdef int64_t pauli_expansion_view_get_num_terms(intptr_t handle, intptr_t view)
     """
     cdef int64_t num_terms
     with nogil:
-        status = cupaulipropPauliExpansionViewGetNumTerms(<const Handle>handle, <const PauliExpansionView>view, &num_terms)
-    check_status(status)
+        __status__ = cupaulipropPauliExpansionViewGetNumTerms(<const Handle>handle, <const PauliExpansionView>view, &num_terms)
+    check_status(__status__)
     return num_terms
 
 
@@ -917,90 +1024,60 @@ cpdef int pauli_expansion_view_get_location(intptr_t view) except? -1:
     """
     cdef _Memspace location
     with nogil:
-        status = cupaulipropPauliExpansionViewGetLocation(<const PauliExpansionView>view, &location)
-    check_status(status)
+        __status__ = cupaulipropPauliExpansionViewGetLocation(<const PauliExpansionView>view, &location)
+    check_status(__status__)
     return <int>location
 
 
-cpdef pauli_expansion_view_prepare_deduplication(intptr_t handle, intptr_t view_in, int32_t make_sorted, int64_t max_workspace_size, intptr_t workspace):
+cpdef pauli_expansion_view_prepare_deduplication(intptr_t handle, intptr_t view_in, int sort_order, int64_t max_workspace_size, intptr_t workspace):
     """Prepares a Pauli expansion view for deduplication.
 
     Args:
         handle (intptr_t): Library handle.
         view_in (intptr_t): Pauli expansion view to be deduplicated.
-        make_sorted (int32_t): Whether or not the output expansion is required to be sorted.
+        sort_order (SortOrder): Sort order to apply to the output expansion. Use ``CUPAULIPROP_SORT_ORDER_NONE`` if sorting is not required. Currently, only ``CUPAULIPROP_SORT_ORDER_INTERNAL`` and ``CUPAULIPROP_SORT_ORDER_NONE`` are supported.
         max_workspace_size (int64_t): Maximum workspace size limit in bytes.
         workspace (intptr_t): Workspace descriptor with the required workspace buffer size.
 
     .. seealso:: `cupaulipropPauliExpansionViewPrepareDeduplication`
     """
     with nogil:
-        status = cupaulipropPauliExpansionViewPrepareDeduplication(<const Handle>handle, <const PauliExpansionView>view_in, make_sorted, max_workspace_size, <WorkspaceDescriptor>workspace)
-    check_status(status)
+        __status__ = cupaulipropPauliExpansionViewPrepareDeduplication(<const Handle>handle, <const PauliExpansionView>view_in, <_SortOrder>sort_order, max_workspace_size, <WorkspaceDescriptor>workspace)
+    check_status(__status__)
 
 
-cpdef pauli_expansion_view_execute_deduplication(intptr_t handle, intptr_t view_in, intptr_t expansion_out, int32_t make_sorted, intptr_t workspace):
+cpdef pauli_expansion_view_execute_deduplication(intptr_t handle, intptr_t view_in, intptr_t expansion_out, int sort_order, intptr_t workspace, intptr_t stream):
     """Deduplicates a Pauli expansion view.
 
     Args:
         handle (intptr_t): Library handle.
         view_in (intptr_t): Pauli expansion view to be deduplicated.
         expansion_out (intptr_t): Pauli expansion to be populated with the deduplicated view.
-        make_sorted (int32_t): Whether or not the output expansion is required to be sorted.
+        sort_order (SortOrder): Sort order to apply to the output expansion. Use ``CUPAULIPROP_SORT_ORDER_NONE`` if sorting is not required. Currently, only ``CUPAULIPROP_SORT_ORDER_INTERNAL`` and ``CUPAULIPROP_SORT_ORDER_NONE`` are supported.
         workspace (intptr_t): Allocated workspace descriptor.
+        stream (intptr_t): CUDA stream to be used for the operation.
 
     .. seealso:: `cupaulipropPauliExpansionViewExecuteDeduplication`
     """
     with nogil:
-        status = cupaulipropPauliExpansionViewExecuteDeduplication(<const Handle>handle, <const PauliExpansionView>view_in, <PauliExpansion>expansion_out, make_sorted, <WorkspaceDescriptor>workspace)
-    check_status(status)
+        __status__ = cupaulipropPauliExpansionViewExecuteDeduplication(<const Handle>handle, <const PauliExpansionView>view_in, <PauliExpansion>expansion_out, <_SortOrder>sort_order, <WorkspaceDescriptor>workspace, <Stream>stream)
+    check_status(__status__)
 
 
-cpdef pauli_expansion_view_prepare_canonical_sort(intptr_t handle, intptr_t view_in, int64_t max_workspace_size, intptr_t workspace):
-    """Prepares a Pauli expansion view for canonical sorting.
-
-    Args:
-        handle (intptr_t): Library handle.
-        view_in (intptr_t): Pauli expansion view to be sorted.
-        max_workspace_size (int64_t): Maximum workspace size limit in bytes.
-        workspace (intptr_t): Workspace descriptor with the required workspace buffer size.
-
-    .. seealso:: `cupaulipropPauliExpansionViewPrepareCanonicalSort`
-    """
-    with nogil:
-        status = cupaulipropPauliExpansionViewPrepareCanonicalSort(<const Handle>handle, <const PauliExpansionView>view_in, max_workspace_size, <WorkspaceDescriptor>workspace)
-    check_status(status)
-
-
-cpdef pauli_expansion_view_execute_canonical_sort(intptr_t handle, intptr_t view_in, intptr_t expansion_out, intptr_t workspace):
-    """Sorts a Pauli expansion view canonically.
-
-    Args:
-        handle (intptr_t): Library handle.
-        view_in (intptr_t): Pauli expansion view to be sorted.
-        expansion_out (intptr_t): Pauli expansion to be populated with the sorted view.
-        workspace (intptr_t): Allocated workspace descriptor.
-
-    .. seealso:: `cupaulipropPauliExpansionViewExecuteCanonicalSort`
-    """
-    with nogil:
-        status = cupaulipropPauliExpansionViewExecuteCanonicalSort(<const Handle>handle, <const PauliExpansionView>view_in, <PauliExpansion>expansion_out, <WorkspaceDescriptor>workspace)
-    check_status(status)
-
-
-cpdef pauli_expansion_populate_from_view(intptr_t handle, intptr_t view_in, intptr_t expansion_out):
+cpdef pauli_expansion_populate_from_view(intptr_t handle, intptr_t view_in, intptr_t expansion_out, intptr_t stream):
     """Populates a Pauli operator expansion from a Pauli expansion view.
 
     Args:
         handle (intptr_t): Library handle.
         view_in (intptr_t): Input Pauli expansion view.
         expansion_out (intptr_t): Populated Pauli operator expansion.
+        stream (intptr_t): CUDA stream to be used for the operation.
 
     .. seealso:: `cupaulipropPauliExpansionPopulateFromView`
     """
     with nogil:
-        status = cupaulipropPauliExpansionPopulateFromView(<const Handle>handle, <const PauliExpansionView>view_in, <PauliExpansion>expansion_out)
-    check_status(status)
+        __status__ = cupaulipropPauliExpansionPopulateFromView(<const Handle>handle, <const PauliExpansionView>view_in, <PauliExpansion>expansion_out, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef pauli_expansion_view_prepare_trace_with_expansion_view(intptr_t handle, intptr_t view1, intptr_t view2, int64_t max_workspace_size, intptr_t workspace):
@@ -1016,11 +1093,11 @@ cpdef pauli_expansion_view_prepare_trace_with_expansion_view(intptr_t handle, in
     .. seealso:: `cupaulipropPauliExpansionViewPrepareTraceWithExpansionView`
     """
     with nogil:
-        status = cupaulipropPauliExpansionViewPrepareTraceWithExpansionView(<const Handle>handle, <const PauliExpansionView>view1, <const PauliExpansionView>view2, max_workspace_size, <WorkspaceDescriptor>workspace)
-    check_status(status)
+        __status__ = cupaulipropPauliExpansionViewPrepareTraceWithExpansionView(<const Handle>handle, <const PauliExpansionView>view1, <const PauliExpansionView>view2, max_workspace_size, <WorkspaceDescriptor>workspace)
+    check_status(__status__)
 
 
-cpdef pauli_expansion_view_compute_trace_with_expansion_view(intptr_t handle, intptr_t view1, intptr_t view2, int32_t take_adjoint1, intptr_t trace, intptr_t workspace):
+cpdef pauli_expansion_view_compute_trace_with_expansion_view(intptr_t handle, intptr_t view1, intptr_t view2, int32_t take_adjoint1, intptr_t trace, intptr_t workspace, intptr_t stream):
     """Computes the trace of two Pauli expansion views.
 
     Args:
@@ -1030,16 +1107,17 @@ cpdef pauli_expansion_view_compute_trace_with_expansion_view(intptr_t handle, in
         take_adjoint1 (int32_t): Whether or not the adjoint of the first view is taken. True ``(!= 0)`` if the adjoint is taken, false ``(0)`` otherwise.
         trace (intptr_t): Pointer to CPU-accessible memory where the trace value will be written. The numerical type must match the data type of the views' coefficients.
         workspace (intptr_t): Allocated workspace descriptor.
+        stream (intptr_t): CUDA stream to be used for the operation.
 
     .. seealso:: `cupaulipropPauliExpansionViewComputeTraceWithExpansionView`
     """
     with nogil:
-        status = cupaulipropPauliExpansionViewComputeTraceWithExpansionView(<const Handle>handle, <const PauliExpansionView>view1, <const PauliExpansionView>view2, take_adjoint1, <void*>trace, <WorkspaceDescriptor>workspace)
-    check_status(status)
+        __status__ = cupaulipropPauliExpansionViewComputeTraceWithExpansionView(<const Handle>handle, <const PauliExpansionView>view1, <const PauliExpansionView>view2, take_adjoint1, <void*>trace, <WorkspaceDescriptor>workspace, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef pauli_expansion_view_prepare_trace_with_zero_state(intptr_t handle, intptr_t view, int64_t max_workspace_size, intptr_t workspace):
-    """Prepares a Pauli expansion view for tracing with the zero state, i.e. computing ``Tr(view * |0...0⟩)`` .
+    """Prepares a Pauli expansion view for tracing with the zero state, i.e. computing ``Tr(view * |0...0>)`` .
 
     Args:
         handle (intptr_t): Library handle.
@@ -1050,24 +1128,25 @@ cpdef pauli_expansion_view_prepare_trace_with_zero_state(intptr_t handle, intptr
     .. seealso:: `cupaulipropPauliExpansionViewPrepareTraceWithZeroState`
     """
     with nogil:
-        status = cupaulipropPauliExpansionViewPrepareTraceWithZeroState(<const Handle>handle, <const PauliExpansionView>view, max_workspace_size, <WorkspaceDescriptor>workspace)
-    check_status(status)
+        __status__ = cupaulipropPauliExpansionViewPrepareTraceWithZeroState(<const Handle>handle, <const PauliExpansionView>view, max_workspace_size, <WorkspaceDescriptor>workspace)
+    check_status(__status__)
 
 
-cpdef pauli_expansion_view_compute_trace_with_zero_state(intptr_t handle, intptr_t view, intptr_t trace, intptr_t workspace):
-    """Traces a Pauli expansion view with the zero state, i.e. computes ``Tr(view * |0...0⟩)`` .
+cpdef pauli_expansion_view_compute_trace_with_zero_state(intptr_t handle, intptr_t view, intptr_t trace, intptr_t workspace, intptr_t stream):
+    """Traces a Pauli expansion view with the zero state, i.e. computes ``Tr(view * |0...0>)`` .
 
     Args:
         handle (intptr_t): Library handle.
         view (intptr_t): Pauli expansion view to be traced.
         trace (intptr_t): Pointer to CPU-accessible memory where the trace value will be written. The numerical type must match the data type of the views' coefficients.
         workspace (intptr_t): Allocated workspace descriptor.
+        stream (intptr_t): CUDA stream to be used for the operation.
 
     .. seealso:: `cupaulipropPauliExpansionViewComputeTraceWithZeroState`
     """
     with nogil:
-        status = cupaulipropPauliExpansionViewComputeTraceWithZeroState(<const Handle>handle, <const PauliExpansionView>view, <void*>trace, <WorkspaceDescriptor>workspace)
-    check_status(status)
+        __status__ = cupaulipropPauliExpansionViewComputeTraceWithZeroState(<const Handle>handle, <const PauliExpansionView>view, <void*>trace, <WorkspaceDescriptor>workspace, <Stream>stream)
+    check_status(__status__)
 
 
 cpdef intptr_t create_clifford_gate_operator(intptr_t handle, int clifford_gate_kind, qubit_indices) except? 0:
@@ -1091,8 +1170,8 @@ cpdef intptr_t create_clifford_gate_operator(intptr_t handle, int clifford_gate_
     get_resource_ptr[int32_t](_qubit_indices_, qubit_indices, <int32_t*>NULL)
     cdef QuantumOperator oper
     with nogil:
-        status = cupaulipropCreateCliffordGateOperator(<const Handle>handle, <_CliffordGateKind>clifford_gate_kind, <const int32_t*>(_qubit_indices_.data()), &oper)
-    check_status(status)
+        __status__ = cupaulipropCreateCliffordGateOperator(<const Handle>handle, <_CliffordGateKind>clifford_gate_kind, <const int32_t*>(_qubit_indices_.data()), &oper)
+    check_status(__status__)
     return <intptr_t>oper
 
 
@@ -1125,8 +1204,8 @@ cpdef intptr_t create_pauli_rotation_gate_operator(intptr_t handle, double angle
     get_resource_ptr[int](_paulis_, paulis, <int*>NULL)
     cdef QuantumOperator oper
     with nogil:
-        status = cupaulipropCreatePauliRotationGateOperator(<const Handle>handle, angle, num_qubits, <const int32_t*>(_qubit_indices_.data()), <const _PauliKind*>(_paulis_.data()), &oper)
-    check_status(status)
+        __status__ = cupaulipropCreatePauliRotationGateOperator(<const Handle>handle, angle, num_qubits, <const int32_t*>(_qubit_indices_.data()), <const _PauliKind*>(_paulis_.data()), &oper)
+    check_status(__status__)
     return <intptr_t>oper
 
 
@@ -1158,8 +1237,8 @@ cpdef intptr_t create_pauli_noise_channel_operator(intptr_t handle, int32_t num_
     get_resource_ptr[double](_probabilities_, probabilities, <double*>NULL)
     cdef QuantumOperator oper
     with nogil:
-        status = cupaulipropCreatePauliNoiseChannelOperator(<const Handle>handle, num_qubits, <const int32_t*>(_qubit_indices_.data()), <const double*>(_probabilities_.data()), &oper)
-    check_status(status)
+        __status__ = cupaulipropCreatePauliNoiseChannelOperator(<const Handle>handle, num_qubits, <const int32_t*>(_qubit_indices_.data()), <const double*>(_probabilities_.data()), &oper)
+    check_status(__status__)
     return <intptr_t>oper
 
 
@@ -1177,8 +1256,8 @@ cpdef int quantum_operator_get_kind(intptr_t handle, intptr_t oper) except? -1:
     """
     cdef _QuantumOperatorKind kind
     with nogil:
-        status = cupaulipropQuantumOperatorGetKind(<const Handle>handle, <const QuantumOperator>oper, &kind)
-    check_status(status)
+        __status__ = cupaulipropQuantumOperatorGetKind(<const Handle>handle, <const QuantumOperator>oper, &kind)
+    check_status(__status__)
     return <int>kind
 
 
@@ -1191,19 +1270,94 @@ cpdef destroy_operator(intptr_t oper):
     .. seealso:: `cupaulipropDestroyOperator`
     """
     with nogil:
-        status = cupaulipropDestroyOperator(<QuantumOperator>oper)
-    check_status(status)
+        __status__ = cupaulipropDestroyOperator(<QuantumOperator>oper)
+    check_status(__status__)
+
+
+cpdef int pauli_expansion_get_sort_order(intptr_t handle, intptr_t pauli_expansion) except? -1:
+    """Queries the sort order of a Pauli operator expansion.
+
+    Args:
+        handle (intptr_t): Library handle.
+        pauli_expansion (intptr_t): Pauli operator expansion.
+
+    Returns:
+        int: Sort order of the Pauli operator expansion. ``CUPAULIPROP_SORT_ORDER_NONE`` indicates the expansion is unsorted.
+
+    .. seealso:: `cupaulipropPauliExpansionGetSortOrder`
+    """
+    cdef _SortOrder sort_order
+    with nogil:
+        __status__ = cupaulipropPauliExpansionGetSortOrder(<const Handle>handle, <const PauliExpansion>pauli_expansion, &sort_order)
+    check_status(__status__)
+    return <int>sort_order
+
+
+cpdef pauli_expansion_view_prepare_sort(intptr_t handle, intptr_t view_in, int sort_order, int64_t max_workspace_size, intptr_t workspace):
+    """Prepares a Pauli expansion view for sorting.
+
+    Args:
+        handle (intptr_t): Library handle.
+        view_in (intptr_t): Pauli expansion view to be sorted.
+        sort_order (SortOrder): Sort order to apply.
+        max_workspace_size (int64_t): Maximum workspace size limit in bytes.
+        workspace (intptr_t): Workspace descriptor with the required workspace buffer size.
+
+    .. seealso:: `cupaulipropPauliExpansionViewPrepareSort`
+    """
+    with nogil:
+        __status__ = cupaulipropPauliExpansionViewPrepareSort(<const Handle>handle, <const PauliExpansionView>view_in, <_SortOrder>sort_order, max_workspace_size, <WorkspaceDescriptor>workspace)
+    check_status(__status__)
+
+
+cpdef pauli_expansion_view_execute_sort(intptr_t handle, intptr_t view_in, intptr_t expansion_out, int sort_order, intptr_t workspace, intptr_t stream):
+    """Sorts a Pauli expansion view.
+
+    Args:
+        handle (intptr_t): Library handle.
+        view_in (intptr_t): Pauli expansion view to be sorted.
+        expansion_out (intptr_t): Pauli expansion to be populated with the sorted view.
+        sort_order (SortOrder): Sort order to apply.
+        workspace (intptr_t): Allocated workspace descriptor.
+        stream (intptr_t): CUDA stream to be used for the operation.
+
+    .. seealso:: `cupaulipropPauliExpansionViewExecuteSort`
+    """
+    with nogil:
+        __status__ = cupaulipropPauliExpansionViewExecuteSort(<const Handle>handle, <const PauliExpansionView>view_in, <PauliExpansion>expansion_out, <_SortOrder>sort_order, <WorkspaceDescriptor>workspace, <Stream>stream)
+    check_status(__status__)
+
+
+cpdef intptr_t create_amplitude_damping_channel_operator(intptr_t handle, int32_t qubit_ind_ex, double damping_prob, double excite_prob) except? 0:
+    """Creates a generalised amplitude damping channel.
+
+    Args:
+        handle (intptr_t): Library handle.
+        qubit_ind_ex (int32_t): Index of qubit upon which to operate.
+        damping_prob (double): Probability that the qubit is damped, i.e. decohered into a classical state.
+        excite_prob (double): Probability that damping results in excitation (driving to the one state) rather than dissipation (driving to the zero state). Set to zero for conventional, dissipative amplitude damping.
+
+    Returns:
+        intptr_t: Quantum operator associated with the channel.
+
+    .. seealso:: `cupaulipropCreateAmplitudeDampingChannelOperator`
+    """
+    cdef QuantumOperator oper
+    with nogil:
+        __status__ = cupaulipropCreateAmplitudeDampingChannelOperator(<const Handle>handle, qubit_ind_ex, damping_prob, excite_prob, &oper)
+    check_status(__status__)
+    return <intptr_t>oper
 
 
 # Custom implementations for truncation strategy functions (not auto-generated)
-cpdef tuple pauli_expansion_view_prepare_operator_application(intptr_t handle, intptr_t view_in, intptr_t quantum_operator, int32_t make_sorted, int32_t keep_duplicates, int32_t num_truncation_strategies, truncation_strategies, int64_t max_workspace_size, intptr_t workspace):
+cpdef tuple pauli_expansion_view_prepare_operator_application(intptr_t handle, intptr_t view_in, intptr_t quantum_operator, int sort_order, int32_t keep_duplicates, int32_t num_truncation_strategies, truncation_strategies, int64_t max_workspace_size, intptr_t workspace):
     """Prepares a Pauli expansion view for quantum operator application.
 
     Args:
         handle (intptr_t): Library handle.
         view_in (intptr_t): Pauli expansion view to apply a quantum operator to.
         quantum_operator (intptr_t): Quantum operator to be applied.
-        make_sorted (int32_t): Whether or not the output expansion is required to be sorted.
+        sort_order (int): Sort order to apply to the output expansion. Use ``CUPAULIPROP_SORT_ORDER_NONE`` if sorting is not required.
         keep_duplicates (int32_t): Whether or not the output expansion is allowed to contain duplicates.
         num_truncation_strategies (int32_t): Number of Pauli expansion truncation strategies.
         truncation_strategies (object): Pauli expansion truncation strategies. It can be:
@@ -1243,12 +1397,12 @@ cpdef tuple pauli_expansion_view_prepare_operator_application(intptr_t handle, i
         _trunc_ptr = <const cupaulipropTruncationStrategy_t*><intptr_t>truncation_strategies
     
     with nogil:
-        status = cupaulipropPauliExpansionViewPrepareOperatorApplication(<const Handle>handle, <const PauliExpansionView>view_in, <const QuantumOperator>quantum_operator, make_sorted, keep_duplicates, num_truncation_strategies, _trunc_ptr, max_workspace_size, &required_xz_bits_buffer_size, &required_coef_buffer_size, <WorkspaceDescriptor>workspace)
+        status = cupaulipropPauliExpansionViewPrepareOperatorApplication(<const Handle>handle, <const PauliExpansionView>view_in, <const QuantumOperator>quantum_operator, <cupaulipropSortOrder_t>sort_order, keep_duplicates, num_truncation_strategies, _trunc_ptr, max_workspace_size, &required_xz_bits_buffer_size, &required_coef_buffer_size, <WorkspaceDescriptor>workspace)
     check_status(status)
     return (required_xz_bits_buffer_size, required_coef_buffer_size)
 
 
-cpdef pauli_expansion_view_compute_operator_application(intptr_t handle, intptr_t view_in, intptr_t expansion_out, intptr_t quantum_operator, int32_t adjoint, int32_t make_sorted, int32_t keep_duplicates, int32_t num_truncation_strategies, truncation_strategies, intptr_t workspace):
+cpdef pauli_expansion_view_compute_operator_application(intptr_t handle, intptr_t view_in, intptr_t expansion_out, intptr_t quantum_operator, int32_t adjoint, int sort_order, int32_t keep_duplicates, int32_t num_truncation_strategies, truncation_strategies, intptr_t workspace, intptr_t stream):
     """Computes the application of a quantum operator to a Pauli expansion view.
 
     Args:
@@ -1257,7 +1411,7 @@ cpdef pauli_expansion_view_compute_operator_application(intptr_t handle, intptr_
         expansion_out (intptr_t): Pauli expansion to be overwritten with the result. The output expansion will satisfy sortedness and uniqueness respectively if these flags have been set to true when creating or resetting the output expansion. Otherwise they may or may not be satisfied. Their state is queryable on the output expansion after this function call via ``cupaulipropPauliExpansionGetSortedness()`` and ``cupaulipropPauliExpansionGetUniqueness()``.
         quantum_operator (intptr_t): Quantum operator to be applied.
         adjoint (int32_t): Whether or not the adjoint of the quantum operator is applied. True (!= 0) if the adjoint is applied, false (0) otherwise.
-        make_sorted (int32_t): Whether or not the output expansion is required to be sorted.
+        sort_order (int): Sort order to apply to the output expansion. Use ``CUPAULIPROP_SORT_ORDER_NONE`` if sorting is not required.
         keep_duplicates (int32_t): Whether or not the output expansion is allowed to contain duplicates.
         num_truncation_strategies (int32_t): Number of Pauli expansion truncation strategies.
         truncation_strategies (object): Pauli expansion truncation strategies. It can be:
@@ -1266,6 +1420,7 @@ cpdef pauli_expansion_view_compute_operator_application(intptr_t handle, intptr_
             - a Python sequence of ``cupaulipropTruncationStrategy_t``.
 
         workspace (intptr_t): Allocated workspace descriptor.
+        stream (intptr_t): CUDA stream to be used for the operation.
 
     .. seealso:: `cupaulipropPauliExpansionViewComputeOperatorApplication`
     """
@@ -1288,7 +1443,7 @@ cpdef pauli_expansion_view_compute_operator_application(intptr_t handle, intptr_
         _trunc_ptr = <const cupaulipropTruncationStrategy_t*><intptr_t>truncation_strategies
     
     with nogil:
-        status = cupaulipropPauliExpansionViewComputeOperatorApplication(<const Handle>handle, <const PauliExpansionView>view_in, <PauliExpansion>expansion_out, <const QuantumOperator>quantum_operator, adjoint, make_sorted, keep_duplicates, num_truncation_strategies, _trunc_ptr, <WorkspaceDescriptor>workspace)
+        status = cupaulipropPauliExpansionViewComputeOperatorApplication(<const Handle>handle, <const PauliExpansionView>view_in, <PauliExpansion>expansion_out, <const QuantumOperator>quantum_operator, adjoint, <cupaulipropSortOrder_t>sort_order, keep_duplicates, num_truncation_strategies, _trunc_ptr, <WorkspaceDescriptor>workspace, <Stream>stream)
     check_status(status)
 
 
@@ -1332,7 +1487,7 @@ cpdef pauli_expansion_view_prepare_truncation(intptr_t handle, intptr_t view_in,
     check_status(status)
 
 
-cpdef pauli_expansion_view_execute_truncation(intptr_t handle, intptr_t view_in, intptr_t expansion_out, int32_t num_truncation_strategies, truncation_strategies, intptr_t workspace):
+cpdef pauli_expansion_view_execute_truncation(intptr_t handle, intptr_t view_in, intptr_t expansion_out, int32_t num_truncation_strategies, truncation_strategies, intptr_t workspace, intptr_t stream):
     """Truncates a Pauli expansion view.
 
     Args:
@@ -1346,6 +1501,7 @@ cpdef pauli_expansion_view_execute_truncation(intptr_t handle, intptr_t view_in,
             - a Python sequence of ``cupaulipropTruncationStrategy_t``.
 
         workspace (intptr_t): Allocated workspace descriptor.
+        stream (intptr_t): CUDA stream to be used for the operation.
 
     .. seealso:: `cupaulipropPauliExpansionViewExecuteTruncation`
     """
@@ -1368,7 +1524,7 @@ cpdef pauli_expansion_view_execute_truncation(intptr_t handle, intptr_t view_in,
         _trunc_ptr = <const cupaulipropTruncationStrategy_t*><intptr_t>truncation_strategies
     
     with nogil:
-        status = cupaulipropPauliExpansionViewExecuteTruncation(<const Handle>handle, <const PauliExpansionView>view_in, <PauliExpansion>expansion_out, num_truncation_strategies, _trunc_ptr, <WorkspaceDescriptor>workspace)
+        status = cupaulipropPauliExpansionViewExecuteTruncation(<const Handle>handle, <const PauliExpansionView>view_in, <PauliExpansion>expansion_out, num_truncation_strategies, _trunc_ptr, <WorkspaceDescriptor>workspace, <Stream>stream)
     check_status(status)
 
 

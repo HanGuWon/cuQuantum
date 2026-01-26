@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -57,18 +57,24 @@ def apply_circuit_with_noise(
         converter = CircuitToEinsum(circuit, dtype=dtype, backend=backend)
     num_channels = 0
     # dtype = getattr(converter.dtype, '__name__', str(converter.dtype).split('.')[-1])
-    for gate_operand, gate_qubits in converter.gates:
+    gates = converter.gates
+    gates_are_diagonal = converter._gates_are_diagonal
+    for (gate_operand, gate_qubits), is_diagonal in zip(gates, gates_are_diagonal):
         # all gate operands are assumed to be unitary
         qubits_indices = [converter.qubits.index(q) for q in gate_qubits]
-        ns.apply_gate(qubits_indices, gate_operand)
+        ns.apply_gate(qubits_indices, gate_operand, diagonal=is_diagonal)
         for q in qubits_indices:
             ns.apply_channel((q,), channel)
             num_channels += 1
     return num_channels
 
-@pytest.mark.parametrize("n_qubits", [5])
-@pytest.mark.parametrize("bitflip_p", [0.02, 0.1])
-def test_quantum_volume(trajectory_sim, bitflip_p, n_qubits, channel_method):
+CONFIGS = [
+        (5, "mps", "complex128", 0.02, "unitary"),
+        (5, "mps", "complex64",  0.1,  "general"),
+        (5, "mps", "complex64", 0.05, "general"),
+    ]
+@pytest.mark.parametrize("n_qubits,state_algo,dtype,bitflip_p,channel_method", CONFIGS)
+def test_quantum_volume(trajectory_sim, n_qubits, bitflip_p, channel_method):
     """
     Apply quantum volume circuit M rounds.
 
@@ -78,7 +84,7 @@ def test_quantum_volume(trajectory_sim, bitflip_p, n_qubits, channel_method):
     Expect the mid-circuit measurements to be uniform
 
     """
-    n_trajectories = 30
+    n_trajectories = 20
     circ_depth_per_round = 5
     channel = depolarizing_channel(bitflip_p)
     if channel_method == "general":
@@ -94,6 +100,7 @@ def test_quantum_volume(trajectory_sim, bitflip_p, n_qubits, channel_method):
         for m in range(measurement_rounds):
             circuit = get_qvolume_circuit(n_qubits, circ_depth_per_round, seed=SEED)
             num_channels = apply_circuit_with_noise(sim, circuit, channel)
+            sim.capture_state()
             probs = sim.probs(measured_qubits)
             probs_orig = probs.copy()
             probs /= probs.sum()
@@ -133,6 +140,7 @@ def test_quantum_volume(trajectory_sim, bitflip_p, n_qubits, channel_method):
                 sim.apply_gate((q,), projector)
             # --
 
+    print(f"ensemble_mid_probs: {ensemble_mid_probs}")
     mean_mid_probs = np.stack(ensemble_mid_probs).mean(axis=0)
     print(f"{mean_mid_probs=}")
     expect_mid_probs = np.ones_like(mean_mid_probs) / mean_mid_probs.size

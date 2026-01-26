@@ -1,8 +1,8 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# This code was automatically generated across versions from 23.03.0 to 25.11.0. Do not modify it directly.
+# This code was automatically generated across versions from 23.03.0 to 26.01.0. Do not modify it directly.
 
 from ..cycutensornet cimport *
 
@@ -153,3 +153,4 @@ cdef cutensornetStatus_t _cutensornetNetworkSetAdjointTensorMemory(const cutenso
 cdef cutensornetStatus_t _cutensornetNetworkContract(const cutensornetHandle_t handle, cutensornetNetworkDescriptor_t networkDesc, int32_t accumulateOutput, const cutensornetWorkspaceDescriptor_t workDesc, const cutensornetSliceGroup_t sliceGroup, cudaStream_t stream) except?_CUTENSORNETSTATUS_T_INTERNAL_LOADING_ERROR nogil
 cdef cutensornetStatus_t _cutensornetNetworkPrepareGradientsBackward(const cutensornetHandle_t handle, cutensornetNetworkDescriptor_t networkDesc, const cutensornetWorkspaceDescriptor_t workDesc) except?_CUTENSORNETSTATUS_T_INTERNAL_LOADING_ERROR nogil
 cdef cutensornetStatus_t _cutensornetNetworkComputeGradientsBackward(const cutensornetHandle_t handle, cutensornetNetworkDescriptor_t networkDesc, int32_t accumulateOutput, const cutensornetWorkspaceDescriptor_t workDesc, const cutensornetSliceGroup_t sliceGroup, cudaStream_t stream) except?_CUTENSORNETSTATUS_T_INTERNAL_LOADING_ERROR nogil
+cdef cutensornetStatus_t _cutensornetStateApplyDiagonalTensorOperator(const cutensornetHandle_t handle, cutensornetState_t tensorNetworkState, int32_t numStateModes, const int32_t* stateModes, void* tensorData, const int64_t* tensorModeStrides, const int32_t immutable, const int32_t adjoint, const int32_t unitary, int64_t* tensorId) except?_CUTENSORNETSTATUS_T_INTERNAL_LOADING_ERROR nogil

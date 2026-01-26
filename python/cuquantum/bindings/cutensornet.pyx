@@ -1,13 +1,11 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# This code was automatically generated across versions from 23.03.0 to 25.11.0. Do not modify it directly.
+# This code was automatically generated across versions from 23.03.0 to 26.01.0. Do not modify it directly.
 
 cimport cython
 cimport cpython
-from cpython.memoryview cimport PyMemoryView_FromMemory
-from cpython cimport buffer as _buffer
 from libcpp.vector cimport vector
 
 from ._utils cimport (get_resource_ptr, get_nested_resource_ptr, nested_resource, nullable_unique_ptr,
@@ -17,18 +15,45 @@ from ._utils cimport (get_resource_ptr, get_nested_resource_ptr, nested_resource
 from enum import IntEnum as _IntEnum
 import warnings as _warnings
 
+
+from libc.stdlib cimport calloc, free, malloc
+from cython cimport view
+cimport cpython.buffer
+cimport cpython.memoryview
+from libc.string cimport memcmp, memcpy
 import numpy as _numpy
+
+
+cdef __from_data(data, dtype_name, expected_dtype, lowpp_type):
+    # _numpy.recarray is a subclass of _numpy.ndarray, so implicitly handled here.
+    if isinstance(data, lowpp_type):
+        return data
+    if not isinstance(data, _numpy.ndarray):
+        raise TypeError("data argument must be a NumPy ndarray")
+    if data.size != 1:
+        raise ValueError("data array must have a size of 1")
+    if data.dtype != expected_dtype:
+        raise ValueError(f"data array must be of dtype {dtype_name}")
+    return lowpp_type.from_ptr(data.ctypes.data, not data.flags.writeable, data)
 
 
 ###############################################################################
 # POD
 ###############################################################################
 
-mps_env_bounds_dtype = _numpy.dtype([
-    ("lower_bound", _numpy.int32, ),
-    ("upper_bound", _numpy.int32, ),
-    ], align=True)
+cdef _get_mps_env_bounds_dtype_offsets():
+    cdef cutensornetMPSEnvBounds_t pod = cutensornetMPSEnvBounds_t()
+    return _numpy.dtype({
+        'names': ['lower_bound', 'upper_bound'],
+        'formats': [_numpy.int32, _numpy.int32],
+        'offsets': [
+            (<intptr_t>&(pod.lowerBound)) - (<intptr_t>&pod),
+            (<intptr_t>&(pod.upperBound)) - (<intptr_t>&pod),
+        ],
+        'itemsize': sizeof(cutensornetMPSEnvBounds_t),
+    })
 
+mps_env_bounds_dtype = _get_mps_env_bounds_dtype_offsets()
 
 cdef class MPSEnvBounds:
     """Empty-initialize an array of `cutensornetMPSEnvBounds_t`.
@@ -45,11 +70,13 @@ cdef class MPSEnvBounds:
     cdef:
         readonly object _data
 
+
+
     def __init__(self, size=1):
         arr = _numpy.empty(size, dtype=mps_env_bounds_dtype)
         self._data = arr.view(_numpy.recarray)
         assert self._data.itemsize == sizeof(cutensornetMPSEnvBounds_t), \
-            f"itemsize {self._data.itemsize} mismatches struct size {sizeof(cutensornetMPSEnvBounds_t)}"
+            f"itemsize {self._data.itemsize} mismatches struct size { sizeof(cutensornetMPSEnvBounds_t) }"
 
     def __repr__(self):
         if self._data.size > 1:
@@ -62,6 +89,9 @@ cdef class MPSEnvBounds:
         """Get the pointer address to the data as Python :class:`int`."""
         return self._data.ctypes.data
 
+    cdef intptr_t _get_ptr(self):
+        return self._data.ctypes.data
+
     def __int__(self):
         if self._data.size > 1:
             raise TypeError("int() argument must be a bytes-like object of size 1. "
@@ -72,13 +102,10 @@ cdef class MPSEnvBounds:
         return self._data.size
 
     def __eq__(self, other):
-        if not isinstance(other, MPSEnvBounds):
+        cdef object self_data = self._data
+        if (not isinstance(other, MPSEnvBounds)) or self_data.size != other._data.size or self_data.dtype != other._data.dtype:
             return False
-        if self._data.size != other._data.size:
-            return False
-        if self._data.dtype != other._data.dtype:
-            return False
-        return bool((self._data == other._data).all())
+        return bool((self_data == other._data).all())
 
     @property
     def lower_bound(self):
@@ -103,13 +130,16 @@ cdef class MPSEnvBounds:
         self._data.upper_bound = val
 
     def __getitem__(self, key):
+        cdef ssize_t key_
+        cdef ssize_t size
         if isinstance(key, int):
+            key_ = key
             size = self._data.size
-            if key >= size or key <= -(size+1):
+            if key_ >= size or key_ <= -(size+1):
                 raise IndexError("index is out of bounds")
-            if key < 0:
-                key += size
-            return MPSEnvBounds.from_data(self._data[key:key+1])
+            if key_ < 0:
+                key_ += size
+            return MPSEnvBounds.from_data(self._data[key_:key_+1])
         out = self._data[key]
         if isinstance(out, _numpy.recarray) and out.dtype == mps_env_bounds_dtype:
             return MPSEnvBounds.from_data(out)
@@ -126,7 +156,7 @@ cdef class MPSEnvBounds:
             data (_numpy.ndarray): a 1D array of dtype `mps_env_bounds_dtype` holding the data.
         """
         cdef MPSEnvBounds obj = MPSEnvBounds.__new__(MPSEnvBounds)
-        if not isinstance(data, (_numpy.ndarray, _numpy.recarray)):
+        if not isinstance(data, _numpy.ndarray):
             raise TypeError("data argument must be a NumPy ndarray")
         if data.ndim != 1:
             raise ValueError("data array must be 1D")
@@ -148,11 +178,10 @@ cdef class MPSEnvBounds:
         if ptr == 0:
             raise ValueError("ptr must not be null (0)")
         cdef MPSEnvBounds obj = MPSEnvBounds.__new__(MPSEnvBounds)
-        cdef flag = _buffer.PyBUF_READ if readonly else _buffer.PyBUF_WRITE
-        cdef object buf = PyMemoryView_FromMemory(
+        cdef flag = cpython.buffer.PyBUF_READ if readonly else cpython.buffer.PyBUF_WRITE
+        cdef object buf = cpython.memoryview.PyMemoryView_FromMemory(
             <char*>ptr, sizeof(cutensornetMPSEnvBounds_t) * size, flag)
-        data = _numpy.ndarray((size,), buffer=buf,
-                              dtype=mps_env_bounds_dtype)
+        data = _numpy.ndarray(size, buffer=buf, dtype=mps_env_bounds_dtype)
         obj._data = data.view(_numpy.recarray)
 
         return obj
@@ -3762,6 +3791,44 @@ cpdef network_compute_gradients_backward(intptr_t handle, intptr_t network_desc,
     with nogil:
         __status__ = cutensornetNetworkComputeGradientsBackward(<const Handle>handle, <NetworkDescriptor>network_desc, accumulate_output, <const WorkspaceDescriptor>work_desc, <const SliceGroup>slice_group, <Stream>stream)
     check_status(__status__)
+
+
+cpdef int64_t state_apply_diagonal_tensor_operator(intptr_t handle, intptr_t tensor_network_state, int32_t num_state_modes, state_modes, intptr_t tensor_data, tensor_mode_strides, int32_t immutable, int32_t adjoint, int32_t unitary) except? -1:
+    """Applies a diagonal tensor operator to the tensor network state.
+
+    Args:
+        handle (intptr_t): cuTensorNet library handle.
+        tensor_network_state (intptr_t): Tensor network state.
+        num_state_modes (int32_t): Number of state modes the diagonal tensor operator acts on.
+        state_modes (object): Pointer to the state modes the diagonal tensor operator acts on. It can be:
+
+            - an :class:`int` as the pointer address to the array, or
+            - a Python sequence of ``int32_t``.
+
+        tensor_data (intptr_t): Elements of the diagonal tensor operator (must be of the same data type as the elements of the state tensor).
+        tensor_mode_strides (object): Strides of the diagonal tensor operator data layout corresponding to the state modes. Passing NULL will assume the default generalized columnwise storage layout. It can be:
+
+            - an :class:`int` as the pointer address to the array, or
+            - a Python sequence of ``int64_t``.
+
+        immutable (int32_t): Whether or not the diagonal tensor operator data may change during the lifetime of the tensor network state. Any data change must be registered via a call to ``cutensornetStateUpdateTensorOperator``.
+        adjoint (int32_t): Whether or not the diagonal tensor operator is applied as its adjoint (ket and bra modes reversed, with all tensor elements complex conjugated). Note that for a diagonal tensor operator, adjoint is equivalent to complex conjugation.
+        unitary (int32_t): Whether or not the diagonal tensor operator is unitary with respect to its ket and bra. For diagonal tensor operators, this corresponds to whether the imaginary component of all its entries is zero.
+
+    Returns:
+        int64_t: Unique integer id (for later identification of the diagonal tensor operator).
+
+    .. seealso:: `cutensornetStateApplyDiagonalTensorOperator`
+    """
+    cdef nullable_unique_ptr[ vector[int32_t] ] _state_modes_
+    get_resource_ptr[int32_t](_state_modes_, state_modes, <int32_t*>NULL)
+    cdef nullable_unique_ptr[ vector[int64_t] ] _tensor_mode_strides_
+    get_resource_ptr[int64_t](_tensor_mode_strides_, tensor_mode_strides, <int64_t*>NULL)
+    cdef int64_t tensor_id
+    with nogil:
+        __status__ = cutensornetStateApplyDiagonalTensorOperator(<const Handle>handle, <State>tensor_network_state, num_state_modes, <const int32_t*>(_state_modes_.data()), <void*>tensor_data, <const int64_t*>(_tensor_mode_strides_.data()), <const int32_t>immutable, <const int32_t>adjoint, <const int32_t>unitary, &tensor_id)
+    check_status(__status__)
+    return tensor_id
 
 
 # for backward compat

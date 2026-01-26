@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025-2025, NVIDIA CORPORATION & AFFILIATES.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -296,8 +296,9 @@ int main(int argc, char** argv) {
   int deviceId = 0;
   HANDLE_CUDA_ERROR(cudaSetDevice(deviceId));
 
-  // Work on the default stream; use cupaulipropSetStream() to perform all
-  // cuPauliProp operations on a specific stream for asynchronous usage
+  // cuPauliProp operations accept a cudaStream_t argument for asynchronous usage
+  // We use the default stream (0) in this example
+  cudaStream_t stream = 0;
   cupaulipropHandle_t handle;
   HANDLE_CUPP_ERROR(cupaulipropCreate(&handle));
 
@@ -408,21 +409,21 @@ int main(int argc, char** argv) {
   cupaulipropPauliExpansion_t inExpansion;
   cupaulipropPauliExpansion_t outExpansion;
 
-  int32_t isSorted = 1;
-  int32_t isUnique = 1;
+  cupaulipropSortOrder_t sortOrder = CUPAULIPROP_SORT_ORDER_NONE;
+  int32_t hasDuplicates = 0;  // isUnique = !hasDuplicates
   cudaDataType_t dataType = CUDA_R_64F;
 
   HANDLE_CUPP_ERROR(cupaulipropCreatePauliExpansion( // init to above
     handle, NUM_CIRCUIT_QUBITS,
     d_inExpansionPauliBuffer, expansionPauliMem,
     d_inExpansionCoefBuffer,  expansionCoefMem,
-    dataType, numObservableTerms, isSorted, isUnique, 
+    dataType, numObservableTerms, sortOrder, hasDuplicates, 
     &inExpansion));
   HANDLE_CUPP_ERROR(cupaulipropCreatePauliExpansion( // init to empty
     handle, NUM_CIRCUIT_QUBITS,
     d_outExpansionPauliBuffer, expansionPauliMem,
     d_outExpansionCoefBuffer,  expansionCoefMem,
-    dataType, 0, 0, 0,
+    dataType, 0, CUPAULIPROP_SORT_ORDER_NONE, 0,
     &outExpansion));
 
   
@@ -528,17 +529,17 @@ int main(int argc, char** argv) {
   // unsorted. This combination gives cuPauliProp the best chance of automatically
   // selecting optimal internal functions and postconditions for the simulation.
   uint32_t adjoint = true;
-  uint32_t makeSorted = false;
+  sortOrder = CUPAULIPROP_SORT_ORDER_NONE;  // reuse variable from above
   uint32_t keepDuplicates = false;
 
   std::cout << "Imposed postconditions:" << std::endl;
-  if (makeSorted) {
+  if (sortOrder != CUPAULIPROP_SORT_ORDER_NONE) {
     std::cout << "  Pauli strings will be sorted." << std::endl;
   }
   if (!keepDuplicates) {
     std::cout << "  Pauli strings will be unique." << std::endl;
   }
-  if (keepDuplicates && !makeSorted) {
+  if (keepDuplicates && sortOrder == CUPAULIPROP_SORT_ORDER_NONE) {
     std::cout << "No postconditions imposed on Pauli strings." << std::endl;
   }
   std::cout << std::endl;
@@ -572,7 +573,7 @@ int main(int argc, char** argv) {
     int64_t reqExpansionCoefMem;
     int64_t reqWorkspaceMem;
     HANDLE_CUPP_ERROR(cupaulipropPauliExpansionViewPrepareOperatorApplication(
-      handle, inView, gate, makeSorted, keepDuplicates,
+      handle, inView, gate, sortOrder, keepDuplicates,
       numPassedTruncStrats, numPassedTruncStrats > 0 ? truncStrats : nullptr,
       workspaceMem,
       &reqExpansionPauliMem, &reqExpansionCoefMem, workspace));
@@ -597,10 +598,10 @@ int main(int argc, char** argv) {
     // Pauli strings pointed to within, truncating the result. The input expansion
     // is unchanged while the output expansion is entirely overwritten.
     HANDLE_CUPP_ERROR(cupaulipropPauliExpansionViewComputeOperatorApplication(
-      handle, inView, outExpansion, gate, 
-      adjoint, makeSorted, keepDuplicates,
+      handle, inView, outExpansion, gate,
+      adjoint, sortOrder, keepDuplicates,
       numPassedTruncStrats, numPassedTruncStrats > 0 ? truncStrats : nullptr,
-      workspace));
+      workspace, stream));
 
     // Free the temporary view since it points to the old input expansion, whereas
     // we will subsequently treat the modified output expansion as the next input
@@ -651,7 +652,7 @@ int main(int argc, char** argv) {
   // Compute the trace; the main and final output of this simulation!
   double expec;
   HANDLE_CUPP_ERROR(cupaulipropPauliExpansionViewComputeTraceWithZeroState(
-    handle, outView, &expec, workspace));
+    handle, outView, &expec, workspace, stream));
 
   // End timing after trace is evaluated
   auto endTime = std::chrono::high_resolution_clock::now();

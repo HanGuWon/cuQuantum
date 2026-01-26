@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -168,8 +168,7 @@ class CircuitToEinsum:
         A sequence of 2-tuple (``gate_operand``, ``qubits``) representing all gates in the circuit:
 
         Returns:
-            tuple:
-
+            - tuple ``gates``:
                 - ``gate_operand``: A ndarray-like tensor object.
                   The modes of the operands are ordered as ``AB...ab...``, where ``AB...`` denotes all output modes and
                   ``ab...`` denotes all input modes.
@@ -236,7 +235,7 @@ class CircuitToEinsum:
         operands = input_operands + circ_utils.get_bitstring_tensors(bitstring, self.backend_name, self.dtype)
         return expression, operands 
     
-    def reduced_density_matrix(self, where, fixed=EMPTY_DICT, lightcone=True):
+    def reduced_density_matrix(self, where, *, fixed=EMPTY_DICT, lightcone=True):
         r"""
         reduced_density_matrix(where, fixed=None, lightcone=True)
 
@@ -297,6 +296,44 @@ class CircuitToEinsum:
         output_mode_labels = output_left_mode_labels + output_right_mode_labels
         expression = circ_utils.convert_mode_labels_to_expression(mode_labels, output_mode_labels)
         return expression, operands
+    
+    def marginal_probability(self, where, *, fixed=EMPTY_DICT, lightcone=True):
+        r"""
+        marginal_probability(where, fixed=None, lightcone=True)
+
+        Generate the Einstein summation expression and tensor operands to compute the marginal probability for
+        the input circuit.
+
+        Unitary reverse lightcone cancellation refers to removing the identity formed by a unitary gate (from
+        the ket state) and its inverse (from the bra state) when there exists no additional operators
+        in-between. One can take advantage of this technique to reduce the effective network size by
+        only including the *causal* gates (gates residing in the lightcone).
+
+        Args:    
+            where: A sequence of qubits specifying where the marginal probability are computed. 
+            fixed: Optional, a dictionary that maps certain qubits to the corresponding fixed states 0 or 1.
+            lightcone: Whether to apply the unitary reverse lightcone cancellation technique to reduce the number of tensors in marginal probability computation.
+            
+        Returns:
+            The Einstein summation expression and a list of tensor operands.
+            The mode labels for output of the expression has the same order as the where argument.
+        
+        .. note::
+
+            The marginal probability resulting from the contraction may be a complex tensor with zero imaginary part depending on the underlying data type.
+         
+        .. seealso:: `unitary reverse lightcone cancellation <https://quimb.readthedocs.io/en/latest/tensor-circuit.html#Unitary-Reverse-Lightcone-Cancellation>`_
+        """
+        expression, operands = self.reduced_density_matrix(where, fixed=fixed, lightcone=lightcone)
+        input_modes, output_modes = expression.split('->')
+        num_target_qubits = len(where)
+        ket_modes = output_modes[:num_target_qubits]
+        bra_modes = output_modes[num_target_qubits:]
+        for ket_mode, bra_mode in zip(ket_modes, bra_modes):
+            input_modes = input_modes.replace(bra_mode, ket_mode)
+        expression = f"{input_modes}->{ket_modes}"
+        return expression, operands
+
     
     def expectation(self, pauli_string, lightcone=True):
         """

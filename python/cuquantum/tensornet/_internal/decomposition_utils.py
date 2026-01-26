@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -79,7 +79,6 @@ def parse_decomposition_subscripts(subscripts):
         raise ValueError("subscripts must specify the modes for both left and right tensors")
     return input_modes, output_modes
 
-
 def compute_mid_extent(size_dict, inputs, outputs):
     """
     Compute the expected mid extent given a size_dict and the modes for both inputs and outputs.
@@ -122,7 +121,6 @@ def compute_mid_extent(size_dict, inputs, outputs):
     left_extent = compute_combined_size(size_dict, left_output)
     right_extent = compute_combined_size(size_dict, right_output)
     return min(left_extent, right_extent)
-
 
 def parse_decomposition(subscripts, *operands):
     """

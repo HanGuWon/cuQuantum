@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -1221,7 +1221,7 @@ class Network:
         if output_grad.shape != self.extents_out:
             raise ValueError(f"output_gradient shape incorrect (given {output_grad.shape}, expected {self.extents_out})")
         if output_grad.dtype != self.data_type:
-            raise ValueError(f"output_gradient dtype incorrect (given {output_grad.dtype}, expected {self.data_type}")
+            raise ValueError(f"output_gradient dtype incorrect (given {output_grad.dtype}, expected {self.data_type})")
         if output_grad.strides != self.strides_out:
             # output_gradient could be a view, but we need a full buffer for now
             if any(s == 0 for s in output_grad.strides):
@@ -1230,7 +1230,7 @@ class Network:
                 buf.copy_(output_grad, stream_holder=stream_holder)
                 output_grad = buf
             else:
-                raise ValueError(f"output_gradient strides incorrect (given {output_grad.strides}, expected {self.strides_out}")
+                raise ValueError(f"output_gradient strides incorrect (given {output_grad.strides}, expected {self.strides_out})")
 
         
         timing = bool(self.logger and self.logger.handlers)
@@ -1573,7 +1573,7 @@ def contract_path(*operands, qualifiers=None, options=None, optimize=None):
     .. note::
         Users may use this API to compute path without device memory allocation. 
         One way to achieve this is via dummy :class:`cupy.ndarray` operands, e.g, 
-        `path finding without dummy arrays <https://github.com/NVIDIA/cuQuantum/blob/main/python/samples/tensornet/contraction/coarse/example24.py>`_. 
+        `path finding with dummy arrays <https://github.com/NVIDIA/cuQuantum/blob/main/python/samples/tensornet/contraction/coarse/example24.py>`_. 
     """
 
     # Create network.

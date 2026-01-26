@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -173,5 +173,3 @@ class TestNoisyStateCorrectness(BaseNoisyStateTester):
     def test_sampling(self, noisy_factory_L1, noisy_config, noisy_factory_svs_L1):
         with noisy_factory_L1.to_network_state(config=noisy_config) as state:
             super()._test_sampling(noisy_factory_svs_L1, state, NUM_TRAJECTORIES_PER_CONFIG)
-
-

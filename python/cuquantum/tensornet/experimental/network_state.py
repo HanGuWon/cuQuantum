@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -30,6 +30,8 @@ from ..circuit_converter import CircuitToEinsum
 from ..configuration import NetworkOptions
 from .._internal.circuit_converter_utils import EMPTY_DICT
 from .._internal.decomposition_utils import update_tensor_extents_strides
+from nvmath.internal.tensor_wrapper import infer_tensor_package
+import importlib
 
 class NetworkState:
     """
@@ -280,6 +282,9 @@ class NetworkState:
                 cutn.destroy_workspace_descriptor(self.workspace_desc)
                 self.workspace_desc = None
             self._free_workspace_memory()
+            if self.state is not None:
+                cutn.destroy_state(self.state)
+                self.state = None
             if self.handle is not None and self.own_handle:
                 cutn.destroy(self.handle)
                 self.handle = None
@@ -368,6 +373,7 @@ The memory limit specified is {self.memory_limit}, while the minimum workspace s
         """
         When preparation can be skipped, this API must be called to update the correct workspace size requirement
         """
+        
         for name in ('scratch', 'cache', 'h_scratch', 'h_cache'):
             if getattr(self, f'workspace_{name}_size') != workspace_dict[f'{name}_size']:
                 setattr(self, f'workspace_{name}_size', workspace_dict[f'{name}_size'])
@@ -414,10 +420,10 @@ The memory limit specified is {self.memory_limit}, while the minimum workspace s
         """
         options = nvmath_utils.check_or_create_options(NetworkOptions, options, "network options")
         if nvmath_utils.infer_object_package(circuit) == 'qiskit':
-            parser_options = {'decompose_gates': True}
+            parser_options = {'decompose_gates': True, 'check_diagonal': True}
         else:
             # cirq.Circuit does not support decompose_gates option
-            parser_options = None
+            parser_options = {'check_diagonal': True}
         with nvmath_utils.device_ctx(options.device_id):
             converter = CircuitToEinsum(circuit, dtype=dtype, backend=backend, options=parser_options)
         return cls.from_converter(converter, config=config, options=options, stream=stream)
@@ -447,9 +453,18 @@ The memory limit specified is {self.memory_limit}, while the minimum workspace s
         dtype = getattr(converter.dtype, '__name__', str(converter.dtype).split('.')[-1])
         state_mode_extents = (2, ) * len(converter.qubits)
         simulator = cls(state_mode_extents, dtype=dtype, config=config, options=options, state_labels=converter.qubits)
-        for gate_operand, gate_qubits in converter.gates:
-            # all gate operands are assumed to be unitary
-            simulator.apply_tensor_operator(gate_qubits, gate_operand, unitary=True, stream=stream)
+        gates = converter.gates
+        gates_are_diagonal = converter._gates_are_diagonal
+        
+        for (operand, qubits), is_diagonal in zip(gates, gates_are_diagonal):
+            if is_diagonal:  
+                if operand.ndim == 2:
+                    operand = operand.diagonal()
+                else:
+                    ndim = operand.ndim
+                    operand = operand.reshape(2**(ndim//2), 2**(ndim//2)).diagonal().reshape((2,)*(ndim//2))
+                simulator.logger.debug("The operand is diagonal, and is converted to a diagonal tensor.")
+            simulator.apply_tensor_operator(qubits, operand, diagonal=is_diagonal, unitary=True, stream=stream)
         return simulator
 
     def _mark_updated(self, structural=True):
@@ -516,7 +531,7 @@ The memory limit specified is {self.memory_limit}, while the minimum workspace s
     # operand indices (b, a, B, A) required for modes a, b
     @state_operands_wrapper(operands_arg_index=2, is_single_operand=True, transpose=True)
     @nvmath_utils.precondition(_check_valid_network)
-    def apply_tensor_operator(self, modes, operand, *, control_modes=None, control_values=None, immutable=False, adjoint=False, unitary=False, stream=None):
+    def apply_tensor_operator(self, modes, operand, *, control_modes=None, control_values=None, immutable=False, adjoint=False, unitary=False, diagonal=False, stream=None):
         """
         Apply a tensor operator to the network state.
 
@@ -533,6 +548,7 @@ The memory limit specified is {self.memory_limit}, while the minimum workspace s
             immutable : Whether the operator is immutable (default `False`).
             adjoint : Whether the operator should be applied in its adjoint form (default `False`).
             unitary : Whether the operator is unitary (default `False`).
+            diagonal : Whether the operator is diagonal (default `False`).
             stream : Provide the CUDA stream to use for applying the tensor operator (this is used to copy the operands to the GPU if they are provided on the CPU). 
                 Acceptable inputs include ``cudaStream_t`` (as Python :class:`int`), :class:`cuda.core.Stream` for NumPy operands, 
                 :class:`cupy.cuda.Stream` for CuPy operands, and :class:`torch.cuda.Stream` for PyTorch operands. 
@@ -547,10 +563,18 @@ The memory limit specified is {self.memory_limit}, while the minimum workspace s
         if isinstance(self.config, MPSConfig) and len(operand.shape) > 4:
             raise ValueError(f"MPS simulation only supports one-body and two-body operators, found operator dimension ({len(operand.shape)})")
         if control_modes is None:
-            tensor_id = cutn.state_apply_tensor_operator(self.handle, self.state, len(modes), 
-                modes, operand.data_ptr, operand.strides, immutable, adjoint, unitary)
-            self.logger.debug(f"The tensor operand has been applied to the state with an ID ({tensor_id}).")
+            if diagonal:
+                tensor_id = cutn.state_apply_diagonal_tensor_operator(self.handle, self.state, len(modes), 
+                    modes, operand.data_ptr, operand.strides, immutable, adjoint, unitary)
+                self.logger.debug(f"The diagonal tensor operand has been applied to the state with an ID ({tensor_id}).")
+            else:
+                tensor_id = cutn.state_apply_tensor_operator(self.handle, self.state, len(modes), 
+                    modes, operand.data_ptr, operand.strides, immutable, adjoint, unitary)
+                self.logger.debug(f"The tensor operand has been applied to the state with an ID ({tensor_id}).")
         else:
+            # Default control_values to 1 for all control modes if not provided (per documentation)
+            if control_values is None:
+                control_values = tuple(1 for _ in control_modes)
             tensor_id = cutn.state_apply_controlled_tensor_operator(self.handle, self.state, len(control_modes), 
                 control_modes, control_values, len(modes), modes, operand.data_ptr, operand.strides, immutable, adjoint, unitary)
             self.logger.debug(f"The controlled tensor operand has been applied to the state with an ID ({tensor_id}).")
@@ -700,7 +724,7 @@ The memory limit specified is {self.memory_limit}, while the minimum workspace s
             An integer `network_id` specifying the location of the network operator.
         """
         if tuple(self.state_mode_extents) != tuple(network_operator.state_mode_extents):
-            raise ValueError(f"The dimension for the state ({self.state_mode_extents}) not matching that of the network operator ({self.state_mode_extents})")
+            raise ValueError(f"The dimension for the state ({self.state_mode_extents}) not matching that of the network operator ({network_operator.state_mode_extents})")
         if network_operator.dtype != self.dtype:
             raise ValueError(f"Input network operator data type ({network_operator.dtype}) different from network state ({self.dtype})")
         if not self.backend_setup:
@@ -714,7 +738,7 @@ The memory limit specified is {self.memory_limit}, while the minimum workspace s
         network_id = cutn.state_apply_network_operator(self.handle, 
             self.state, network_operator.network_operator, immutable, adjoint, unitary)
         self.non_owned_network_operators[network_id] = network_operator
-        self.logger.info("Network operator has been applied to the state with an ID ({network_id})")
+        self.logger.info(f"Network operator has been applied to the state with an ID ({network_id})")
         # reset norm / state vector
         self._mark_updated()
         return network_id
@@ -927,7 +951,7 @@ The memory limit specified is {self.memory_limit}, while the minimum workspace s
                 equivalent_caller = equivalent_callers_set.pop()
                 assert equivalent_caller in self.workspace_sizes_requirements
                 workspace_size = self.workspace_sizes_requirements[equivalent_caller]
-
+                
             self._reset_workspace_size_requirement(workspace_size)
 
         self._allocate_workspace_memory_perhaps(stream_holder, "scratch")
@@ -1294,7 +1318,7 @@ The memory limit specified is {self.memory_limit}, while the minimum workspace s
             self.owned_network_operators[None] = operators
         assert isinstance(operators, NetworkOperator)
         if tuple(self.state_mode_extents) != tuple(operators.state_mode_extents):
-            raise ValueError(f"The dimension for the state ({self.state_mode_extents}) not matching that of the network operator ({self.state_mode_extents})")
+            raise ValueError(f"The dimension for the state ({self.state_mode_extents}) not matching that of the network operator ({operators.state_mode_extents})")
         expectation_value = np.empty(1, dtype=self.dtype)
         norm = np.empty(1, dtype=self.dtype)
         create_args = (operators.network_operator, )

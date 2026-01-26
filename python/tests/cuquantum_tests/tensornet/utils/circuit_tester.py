@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -10,7 +10,7 @@ from cuquantum.tensornet import CircuitToEinsum, contract
 
 from .data import ARRAY_BACKENDS
 from .circuit_ifc import QuantumStateTestHelper, CircuitHelper
-from .helpers import _BaseTester, get_contraction_tolerance
+from .helpers import _BaseTester, get_contraction_tolerance, TensorBackend
 
 
 class BaseCircuitToEinsumTester(_BaseTester):
@@ -59,12 +59,18 @@ class BaseCircuitToEinsumTester(_BaseTester):
             QuantumStateTestHelper.verify_batched_amplitudes(state_vector, fixed, result, **self._get_tolerance(circuit, dtype))
 
 
-    def _test_reduced_density_matrix(self, circuit, option, state_vector, lightcone):
-        rng, backend, dtype = self.get_config(circuit, option, lightcone, 'reduced_density_matrix')
+    def _test_rdm_and_probability(self, circuit, option, state_vector, lightcone):
+        rng, backend, dtype = self.get_config(circuit, option, lightcone, 'rdm_and_probability')
         converter = CircuitToEinsum(circuit, dtype=dtype, backend=backend, options=option)
         qubits = converter.qubits
         for where, fixed in CircuitHelper.where_fixed_iterator(qubits, self.num_tests_per_task, rng):
+            # marginal probablity is diagonal of the reduced density matrix, therefore we can verify the marginal probability directly
             result = self._compute_property(converter, 'reduced_density_matrix', where, fixed=fixed, lightcone=lightcone)
+            probability = self._compute_property(converter, 'marginal_probability', where, fixed=fixed, lightcone=lightcone)
+            assert probability.ndim == len(where)
+            expected_probability = result.reshape(2**len(where), 2**len(where)).diagonal().reshape((2,) * len(where))
+            TensorBackend.verify_close(probability.imag, 0, **self._get_tolerance(circuit, dtype))
+            TensorBackend.verify_close(probability, expected_probability, **self._get_tolerance(circuit, dtype))
             where = [qubits.index(q) for q in where]
             fixed = {qubits.index(q): i for q, i in fixed.items()}
             QuantumStateTestHelper.verify_reduced_density_matrix(state_vector, where, result, fixed=fixed, **self._get_tolerance(circuit, dtype))

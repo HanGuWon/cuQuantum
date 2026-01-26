@@ -1,8 +1,8 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# This code was automatically generated with version 25.09.0. Do not modify it directly.
+# This code was automatically generated with version 26.01.0. Do not modify it directly.
 
 from libc.stdint cimport intptr_t
 
@@ -119,6 +119,7 @@ cpdef intptr_t create_operator(intptr_t handle, int32_t num_space_modes, space_m
 cpdef destroy_operator(intptr_t superoperator)
 cpdef operator_append_term(intptr_t handle, intptr_t superoperator, intptr_t operator_term, int32_t duality, complex coefficient, coefficient_callback, coefficient_gradient_callback)
 cpdef operator_append_term_batch(intptr_t handle, intptr_t superoperator, intptr_t operator_term, int32_t duality, int64_t batch_size, intptr_t static_coefficients, intptr_t total_coefficients, coefficient_callback, coefficient_gradient_callback)
+cpdef attach_batched_coefficients(intptr_t handle, intptr_t superoperator, int32_t num_operator_term_batched_coeffs, operator_term_batched_coeffs_tmp, operator_term_batched_coeffs, int32_t num_operator_product_batched_coeffs, operator_product_batched_coeffs_tmp, operator_product_batched_coeffs)
 cpdef operator_prepare_action(intptr_t handle, intptr_t superoperator, intptr_t state_in, intptr_t state_out, int compute_type, size_t workspace_size_limit, intptr_t workspace, intptr_t stream)
 cpdef operator_compute_action(intptr_t handle, intptr_t superoperator, double time, int64_t batch_size, int32_t num_params, intptr_t params, intptr_t state_in, intptr_t state_out, intptr_t workspace, intptr_t stream)
 cpdef operator_prepare_action_backward_diff(intptr_t handle, intptr_t superoperator, intptr_t state_in, intptr_t state_out_adj, int compute_type, size_t workspace_size_limit, intptr_t workspace, intptr_t stream)
@@ -142,6 +143,8 @@ cpdef destroy_workspace(intptr_t workspace_descr)
 cpdef size_t workspace_get_memory_size(intptr_t handle, intptr_t workspace_descr, int mem_space, int workspace_kind) except? -1
 cpdef workspace_set_memory(intptr_t handle, intptr_t workspace_descr, int mem_space, int workspace_kind, intptr_t memory_buffer, size_t memory_buffer_size)
 cpdef tuple workspace_get_memory(intptr_t handle, intptr_t workspace_descr, int mem_space, int workspace_kind)
+cpdef elementary_operator_attach_buffer(intptr_t handle, intptr_t elem_operator, intptr_t buffer, size_t buffer_size)
+cpdef matrix_operator_dense_local_attach_buffer(intptr_t handle, intptr_t matrix_operator, intptr_t buffer, size_t buffer_size)
 
 ###############################################################################
 

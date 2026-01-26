@@ -1,8 +1,8 @@
-# Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# This code was automatically generated with version 25.09.0. Do not modify it directly.
+# This code was automatically generated with version 26.01.0. Do not modify it directly.
 
 from cpython.memoryview cimport PyMemoryView_FromMemory
 from cpython.buffer cimport PyBUF_READ, PyBUF_WRITE

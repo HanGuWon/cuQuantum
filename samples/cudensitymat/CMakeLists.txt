@@ -1,5 +1,5 @@
 ##
-## SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+## SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 ## SPDX-License-Identifier: BSD-3-Clause
 ##
 ## Redistribution and use in source and binary forms, with or without
@@ -33,6 +33,9 @@
 #
 # Multi-GPU example with MPI (assuming A100 GPU):
 # cmake .. -DCMAKE_CUDA_ARCHITECTURES=80 -DENABLE_MPI=TRUE
+#
+# Multi-GPU example with NCCL (assuming A100 GPU):
+# cmake .. -DCMAKE_CUDA_ARCHITECTURES=80 -DENABLE_NCCL=TRUE -DENABLE_MPI=TRUE
 
 cmake_minimum_required(VERSION 3.22.0 FATAL_ERROR)
 
@@ -71,6 +74,53 @@ if(ENABLE_MPI)
   endif()
 else()
   message(STATUS "Building a single-GPU version of the examples!")
+endif()
+
+# Find NCCL
+if(ENABLE_NCCL)
+  if(NOT DEFINED ENV{NCCL_ROOT} AND NOT DEFINED NCCL_ROOT)
+    message(STATUS "NCCL_ROOT is not set. Trying to find NCCL in standard locations...")
+    find_path(NCCL_INCLUDE_DIR nccl.h HINTS /usr/include /usr/local/include)
+    # Look for versioned library as well (pip packages may only have libnccl.so.2)
+    find_library(NCCL_LIBRARY NAMES nccl libnccl.so libnccl.so.2 HINTS /usr/lib /usr/local/lib /usr/lib/x86_64-linux-gnu)
+    if(NCCL_INCLUDE_DIR AND NCCL_LIBRARY)
+      set(NCCL_FOUND TRUE)
+      get_filename_component(NCCL_LIB_DIR ${NCCL_LIBRARY} DIRECTORY)
+    endif()
+  else()
+    if(DEFINED ENV{NCCL_ROOT})
+      set(NCCL_ROOT "$ENV{NCCL_ROOT}")
+    endif()
+    message(STATUS "Looking for NCCL in ${NCCL_ROOT}")
+    if(EXISTS ${NCCL_ROOT})
+      set(NCCL_INCLUDE_DIR ${NCCL_ROOT}/include)
+      if(EXISTS "${NCCL_ROOT}/lib64")
+        set(NCCL_LIB_DIR "${NCCL_ROOT}/lib64")
+      elseif(EXISTS "${NCCL_ROOT}/lib")
+        set(NCCL_LIB_DIR "${NCCL_ROOT}/lib")
+      endif()
+      # Find the actual NCCL library file (handles pip packages that only have versioned .so.2)
+      find_library(NCCL_LIBRARY
+        NAMES nccl libnccl.so libnccl.so.2
+        PATHS ${NCCL_LIB_DIR}
+        NO_DEFAULT_PATH
+      )
+      if(NCCL_LIBRARY)
+        set(NCCL_FOUND TRUE)
+      endif()
+    endif()
+  endif()
+  if(NCCL_FOUND)
+    message(STATUS "NCCL found: include=${NCCL_INCLUDE_DIR}, library=${NCCL_LIBRARY}")
+    if(MPI_FOUND)
+      message(STATUS "Building multi-GPU NCCL-enabled example!")
+    else()
+      message(STATUS "NCCL example requires MPI for bootstrapping. Please enable MPI with -DENABLE_MPI=TRUE")
+      set(NCCL_FOUND FALSE)
+    endif()
+  else()
+    message(STATUS "NCCL not found: Skipping NCCL example")
+  endif()
 endif()
 
 # cuTensor
@@ -224,6 +274,56 @@ if(MPI_FOUND)
 
 endif() # MPI_FOUND
 
+# Multi-GPU operator action example with NCCL
+if(NCCL_FOUND AND MPI_FOUND)
+
+  add_executable(operator_action_nccl_example
+    operator_action_nccl_example.cpp
+  )
+
+  set_target_properties(operator_action_nccl_example
+    PROPERTIES
+      CXX_STANDARD ${CMAKE_CXX_STANDARD}
+      CUDA_STANDARD ${CMAKE_CUDA_STANDARD}
+      POSITION_INDEPENDENT_CODE ON
+  )
+
+  target_compile_definitions(operator_action_nccl_example
+    PUBLIC
+      NCCL_ENABLED
+      MPI_ENABLED
+  )
+
+  target_include_directories(operator_action_nccl_example
+    PUBLIC
+      ${CUDENSITYMAT_INC_DIR}
+      ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+      ${NCCL_INCLUDE_DIR}
+      ${MPI_CXX_INCLUDE_DIRS}
+  )
+
+  target_link_directories(operator_action_nccl_example
+    PUBLIC
+      ${CUDENSITYMAT_LIB_DIR}
+      ${CUTENSORNET_LIB_DIR}
+      ${CUTENSOR_LIB_DIR}
+  )
+
+  target_link_libraries(operator_action_nccl_example
+    PUBLIC
+      cudensitymat
+      cutensornet
+      cutensor
+      ${NCCL_LIBRARY}
+      CUDA::cusolver
+      CUDA::cublas
+      CUDA::curand
+      CUDA::cudart
+      MPI::MPI_CXX
+  )
+
+endif() # NCCL_FOUND AND MPI_FOUND
+
 # Single-GPU operator action gradient example
 add_executable(operator_action_gradient_example
   operator_action_gradient_example.cpp
@@ -250,6 +350,42 @@ target_link_directories(operator_action_gradient_example
 )
 
 target_link_libraries(operator_action_gradient_example
+  PUBLIC
+    cudensitymat
+    cutensornet
+    cutensor
+    CUDA::cusolver
+    CUDA::cublas
+    CUDA::curand
+    CUDA::cudart
+)
+
+# Single-GPU batched operator action gradient example
+add_executable(operator_action_batched_gradient_example
+  operator_action_batched_gradient_example.cpp
+)
+
+set_target_properties(operator_action_batched_gradient_example
+  PROPERTIES
+    CXX_STANDARD ${CMAKE_CXX_STANDARD}
+    CUDA_STANDARD ${CMAKE_CUDA_STANDARD}
+    POSITION_INDEPENDENT_CODE ON
+)
+
+target_include_directories(operator_action_batched_gradient_example
+  PUBLIC
+    ${CUDENSITYMAT_INC_DIR}
+    ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+)
+
+target_link_directories(operator_action_batched_gradient_example
+  PUBLIC
+    ${CUDENSITYMAT_LIB_DIR}
+    ${CUTENSORNET_LIB_DIR}
+    ${CUTENSOR_LIB_DIR}
+)
+
+target_link_libraries(operator_action_batched_gradient_example
   PUBLIC
     cudensitymat
     cutensornet

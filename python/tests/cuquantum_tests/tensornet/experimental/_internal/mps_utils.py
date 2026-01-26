@@ -1,7 +1,8 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+import math
 import numpy as np
 
 import opt_einsum as oe
@@ -11,7 +12,8 @@ from cuquantum.tensornet._internal.decomposition_utils import compute_mid_extent
 
 from ...utils.approxTN_utils import gate_decompose, tensor_decompose, SVD_TOLERANCE, verify_unitary
 from ...utils.helpers import get_or_create_tensor_backend, get_dtype_name, get_contraction_tolerance
-
+from nvmath.internal.tensor_wrapper import infer_tensor_package
+import importlib
 
 # valid simulation setting for reference MPS class
 MPS_VALID_CONFIGS = {'max_extent', 'abs_cutoff', 'rel_cutoff', 'discarded_weight_cutoff', 'normalization', 'canonical_center', 'mpo_application', 'gauge_option'}
@@ -123,9 +125,10 @@ class MPS:
         for key in ('abs_cutoff', 'rel_cutoff', 'discarded_weight_cutoff'):
             self.is_exact_svd = self.is_exact_svd and self.svd_options.get(key, None) in (0, None)
         max_extent = self.svd_options.pop('max_extent', None)
+        self.is_exact_mps = self.is_exact_svd and max_extent is None and mpo_application == 'exact'
         self.max_extents = []
         for i in range(self.n-1):
-            max_shared_extent = min(np.prod(self.state_dims[:i+1]), np.prod(self.state_dims[i+1:]))
+            max_shared_extent = min(math.prod(self.state_dims[:i+1]), math.prod(self.state_dims[i+1:]))
             extent = max_shared_extent if max_extent is None else min(max_extent, max_shared_extent)
             self.max_extents.append(extent)
 
@@ -248,8 +251,8 @@ class MPS:
             self.mps_tensor_absorb_gauge(i-1, gauge, direction='right')
 
         ti, tj = self[left], self[right]
-        qr_min_extent_left = min(np.prod(ti.shape[:2]), ti.shape[-1])
-        qr_min_extent_right = min(np.prod(tj.shape[1:]), tj.shape[0])
+        qr_min_extent_left = min(math.prod(ti.shape[:2]), ti.shape[-1])
+        qr_min_extent_right = min(math.prod(tj.shape[1:]), tj.shape[0])
         min_exact_e = min(qr_min_extent_left, qr_min_extent_right)
         max_extent = min(max_extent, min_exact_e) if max_extent is not None else min_exact_e
         svd_options.pop('partition', None)
@@ -287,8 +290,8 @@ class MPS:
         svd_options['partition'] = None
 
         ti, tj = self[left], self[right]
-        qr_min_extent_right = min(np.prod(ti.shape[:2]), ti.shape[-1])
-        qr_min_extent_left = min(np.prod(tj.shape[1:]), tj.shape[0])
+        qr_min_extent_right = min(math.prod(ti.shape[:2]), ti.shape[-1])
+        qr_min_extent_left = min(math.prod(tj.shape[1:]), tj.shape[0])
         min_exact_e = min(qr_min_extent_left, qr_min_extent_right)
         max_extent = min(max_extent, min_exact_e) if max_extent is not None else min_exact_e
 
@@ -305,7 +308,7 @@ class MPS:
             for i in range(start, end+1):
                 if i == self.n - 1:
                     break
-                left_extent, shared_extent, right_extent = np.prod(self[i].shape[:2]), self[i].shape[-1], np.prod(self[i+1].shape[1:]) 
+                left_extent, shared_extent, right_extent = math.prod(self[i].shape[:2]), self[i].shape[-1], math.prod(self[i+1].shape[1:]) 
                 shared_extent_manageble = shared_extent == min(left_extent, right_extent, shared_extent)
                 manageable = manageable and shared_extent_manageble and shared_extent <= self.max_extents[i]
                 if not manageable:
@@ -358,14 +361,23 @@ class MPS:
         return
 
     def _apply_gate_1q(self, i, operand):
-        self[i] = self.backend.einsum('ipj,Pp->iPj', self[i], operand)
+        # Infer diagonal_gate from operand shape
+        assert operand.ndim in {1, 2}
+        is_diagonal = operand.ndim == 1
+        if is_diagonal:
+            self[i] = self.backend.einsum('ipj,p->ipj', self[i], operand)
+        else:
+            self[i] = self.backend.einsum('ipj,Pp->iPj', self[i], operand)
     
     def _apply_gate_2q(self, i, j, operand):
+        # Infer diagonal_gate from operand shape
+        assert operand.ndim in {2, 4}
+        is_diagonal = operand.ndim == 2
         if i > j:
             try:
-                operand = operand.transpose(1,0,3,2)
+                operand = operand.transpose(1,0) if is_diagonal else operand.transpose(1,0,3,2)
             except TypeError:
-                operand = operand.permute(1,0,3,2)
+                operand = operand.permute(1,0) if is_diagonal else operand.permute(1,0,3,2)
             return self._apply_gate_2q(j, i, operand)
         elif i == j:
             raise ValueError(f"gate acting on the same site {i} twice")
@@ -380,12 +392,21 @@ class MPS:
             self.mps_tensor_absorb_gauge(i, s, direction="right")  #put on first tensor 
             self.mps_tensor_absorb_gauge(j, sb, direction="right") #put on second tensor
 
-            size_dict = dict(zip('ipjjqkPQpq', self[i].shape + self[j].shape + operand.shape))
-
+            # Whether the gate is diagonal or not will not affect the mid_extent outcome.
+            # Always compute mid_extent with the full gate expression to ensure consistency.
+            shapes = self[i].shape + self[j].shape + operand.shape
+            if is_diagonal:
+                shapes += operand.shape
+            size_dict = dict(zip('ipjjqkPQpq', shapes))
             mid_extent = compute_mid_extent(size_dict, ('ipj','jqk','PQpq'), ('iPj','jQk'))
             max_extent = min(mid_extent, self.max_extents[i]) 
 
-            self[i], s, self[j] = gate_decompose('ipj,jqk,PQpq->iPj,jQk', self[i], self[j], operand, max_extent=max_extent, **self.svd_options)
+            # Only the expression changes based on whether the gate is diagonal
+            if is_diagonal:
+                expr = 'ipj,jqk,pq->ipj,jqk'
+            else:
+                expr = 'ipj,jqk,PQpq->iPj,jQk'
+            self[i], s, self[j] = gate_decompose(expr, self[i], self[j], operand, max_extent=max_extent, **self.svd_options)
             if s is not None:
                 self.gauges[i+1] = self.backend.asarray(s)
 
@@ -397,17 +418,17 @@ class MPS:
             # insert swap gates recursively
             swaps = []
             while (j != i+1):
-                self._swap(i, 'right', False)
+                self._swap(i, 'right', exact=self.is_exact_mps)
                 swaps.append([i, 'right'])
                 i += 1
                 if (j == i+1):
                     break
-                self._swap(j, 'left', False)
+                self._swap(j, 'left', exact=self.is_exact_mps)
                 swaps.append([j, 'left'])
                 j -= 1
             self._apply_gate_2q(i, j, operand)
             for x, direction in swaps[::-1]:
-                self._swap(x, direction=direction)
+                self._swap(x, direction, exact=self.is_exact_mps)
     
     def apply_gate(self, qudits, operand):
         gauge_option = self.gauge_option             
@@ -467,12 +488,12 @@ class MPS:
             forward_order = q1 > q0
             q0, q1 = sorted([q0, q1])
             while (q1 != q0 + 1):
-                self._swap(q0, 'right', exact_mpo)
+                self._swap(q0, 'right', exact=exact_mpo)
                 record_swap(q0, 'right')
                 q0 += 1
                 if (q1 == q0+1):
                     break
-                self._swap(q1, 'left', exact_mpo)
+                self._swap(q1, 'left', exact=exact_mpo)
                 record_swap(q1, 'left')
                 q1 -= 1
             if not forward_order:
@@ -534,7 +555,7 @@ class MPS:
         for i in range(self.n):
             site = qudits_order.index(i)
             while (site != i):
-                self._swap(site, 'left', exact_mpo)
+                self._swap(site, 'left', exact=exact_mpo)
                 record_swap(site, 'left')
                 site -= 1
         # sanity check to make sure original ordering is obtained
@@ -549,9 +570,18 @@ class MPS:
     def from_converter(cls, converter, **kwargs):
         dtype = get_dtype_name(converter.dtype)
         mps = cls(converter.qubits, converter.backend.__name__, dtype=dtype, **kwargs)
-        for operand, qubits in converter.gates:
+        gates = converter.gates
+        gates_are_diagonal = converter._gates_are_diagonal
+        for (operand, qubits), diagonal_gate in zip(gates, gates_are_diagonal):
             if len(qubits) > 2:
                 return None
+            if diagonal_gate:
+                if operand.ndim == 2:
+                    operand = operand.diagonal()
+                else:
+                    # Extract diagonal using reshape 
+                    ndim = operand.ndim
+                    operand = operand.reshape(2**(ndim//2), 2**(ndim//2)).diagonal().reshape((2,)*(ndim//2))
             mps.apply_gate(qubits, operand)
         mps.canonicalize()
         return mps
@@ -579,7 +609,10 @@ class MPS:
                     # Gate
                     mps.apply_gate(modes, op)
             else:
-                if 'control_values' in gate_info and 'control_modes' in gate_info:
+                if 'diagonal_gate' in gate_info:
+                    # diagonal_gate is inferred from operand shape in apply_gate
+                    mps.apply_gate(modes, op)
+                elif 'control_values' in gate_info and 'control_modes' in gate_info:
                     ctrl_modes, ctrl_vals = gate_info['control_modes'], gate_info['control_values']
                     ct_tensors = factory.compute_ct_mpo_tensors(ctrl_modes, ctrl_vals, modes, op) 
                     new_modes = modes + ctrl_modes

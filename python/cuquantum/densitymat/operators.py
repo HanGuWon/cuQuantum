@@ -1137,13 +1137,12 @@ class Operator:
             state_in._last_compute_event = self._last_compute_event
             state_in_adj._last_compute_event = self._last_compute_event
             self._update_last_compute_event_downstream()
-            _ = check_and_get_batchsize(self._batch_size, batch_size)
             if self._gradient_dir == cudm.DifferentiationDir.BACKWARD:
                 cudm.operator_compute_action_backward_diff(
                     self._ctx._handle._validated_ptr,
                     self._validated_ptr,
                     t,
-                    self._batch_size,
+                    check_and_get_batchsize(self._batch_size, state_in.batch_size),
                     num_params,
                     params_ptr,
                     state_in._validated_ptr,

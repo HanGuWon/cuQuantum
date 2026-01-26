@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -116,7 +116,7 @@ description = "NVIDIA cuQuantum Python JAX"
 with open(os.path.join(os.path.dirname(__file__), "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 classifiers=[
     "Development Status :: 5 - Production/Stable",
@@ -134,11 +134,11 @@ classifiers=[
 install_requires = ['pybind11']
 if cuda_major_ver == '12':
     classifiers.append("Environment :: GPU :: NVIDIA CUDA :: 12")
-    install_requires.append("cuquantum-python-cu12~=25.11")
+    install_requires.append("cuquantum-python-cu12~=26.1.0")
     install_requires.append("jax[cuda12-local]>=0.5,<0.7")
 else:
     classifiers.append("Environment :: GPU :: NVIDIA CUDA :: 13")
-    install_requires.append("cuquantum-python-cu13~=25.11")
+    install_requires.append("cuquantum-python-cu13~=26.1.0")
     install_requires.append("jax[cuda13-local]>=0.8,<0.9")
 
 setup(

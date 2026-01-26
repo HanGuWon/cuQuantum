@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -68,11 +68,12 @@ class TrajectoryNaive(TrajectorySim):
         gate = channel.choose_op()
         self.apply_gate(qubits, gate)
 
-    def apply_gate(self, qubits, gate, control_modes=None, control_values=None):
+    def apply_gate(self, qubits, gate, diagonal=False, control_modes=None, control_values=None):
         self.ns.apply_tensor_operator(
             qubits,
             gate.astype(self.dtype),
             unitary=False,
+            diagonal=diagonal,
             control_modes=control_modes,
             control_values=control_values,
             immutable=True,
@@ -105,46 +106,62 @@ class TrajectoryApplyChannel(TrajectoryNaive):
     # Prevents applying a gate to the same object in the trajectory loop
     _constructed: bool
     # Prevents re-using measured MPS between trajectories
-    _evolved: bool
+    _measured: bool
+    _captured: bool
 
-    def apply_gate(self, qubits, gate, control_modes=None, control_values=None):
+    def _pre_op_check(self):
+        if self._measured:
+            # The user called a measurement and then applied a gate.
+            # They should have called capture_state() before applying the gate.
+            if not self._captured:
+                raise ValueError("Mid-circuit measurement requires calling capture_state() before measuring.")
+            if "mps" not in self.algo:
+                raise ValueError("Mid-circuit measurement is only supported for MPS simulation.")
+
+    def apply_gate(self, qubits, gate, diagonal=False, control_modes=None, control_values=None):
+        self._pre_op_check()
         if self._constructed:
             return
         self.ns.apply_tensor_operator(
             qubits,
             gate.astype(self.dtype),
             unitary=True,
+            diagonal=diagonal,
             control_modes=control_modes,
             control_values=control_values,
             immutable=True,
         )
 
     def apply_channel(self, qubits, channel: QuantumChannel):
+        self._pre_op_check()
         if self._constructed:
             return
         channel.set_dtype(self.dtype)
         if channel.is_general():
             self.ns.apply_general_tensor_channel(qubits, channel.ops)
         else:
-
             self.ns.apply_unitary_tensor_channel(qubits, channel.ops, channel.probs)
 
-    def evolve(self):
-        if self.algo == "mps":
+    def capture_state(self):
+        if "mps" in self.algo:
             self.ns.compute_output_state(release_operators=True)
-            sv = self.ns.compute_state_vector()
-        self._evolved = True
+            self._captured = True
+            self._constructed = False
+            self._measured = False
 
     def rdm(self, qubits=None):
-        self.evolve()
+        self._measured = True
+        self.ns.compute_output_state()
         return super().rdm(qubits)
 
     def iterate_trajectories(self, n_trajectories):
-        self._evolved = False
+        self._measured = False
         self._constructed = False
+        self._captured = False
         self.ns = network_state_config(self.n_qubits, algo=self.algo, dtype=self.dtype)
         for i in range(n_trajectories):
-            if self._evolved:
+            self._measured = False
+            if self._captured:
                 self.ns.free()
                 self.ns = network_state_config(self.n_qubits, algo=self.algo, dtype=self.dtype)
                 self._constructed = False

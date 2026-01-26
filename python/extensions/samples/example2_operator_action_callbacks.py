@@ -1,17 +1,12 @@
-# Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
-
-import sys
-import logging
 
 import jax
 import jax.numpy as jnp
 
 jax.config.update("jax_enable_x64", True)
 jax.config.update("jax_default_matmul_precision", "highest")
-
-import cupy as cp
 
 from cuquantum.bindings import cudensitymat as cudm
 from cuquantum.densitymat.jax import (
@@ -20,6 +15,42 @@ from cuquantum.densitymat.jax import (
     Operator,
     operator_action
 )
+
+import logging
+
+# Enable logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(name)s [%(levelname)s] %(message)s'
+)
+
+
+# Define callbacks outside jitted scope to avoid JAX tracing interference
+def n_callback(time, params, storage):
+    storage[:] = 0.0
+    dim = storage.shape[0]
+    for i in range(dim):
+        storage[i, i] = i
+
+
+def a_callback(time, params, storage):
+    storage[:] = 0.0
+    dim = storage.shape[0]
+    for i in range(1, dim):
+        storage[i - 1, i] = i ** 0.5
+
+
+def ad_callback(time, params, storage):
+    storage[:] = 0.0
+    dim = storage.shape[0]
+    for i in range(1, dim):
+        storage[i, i - 1] = i ** 0.5
+
+
+# Wrap callbacks outside jitted scope
+n_wrapped_callback = cudm.WrappedTensorCallback(n_callback, cudm.CallbackDevice.GPU)
+a_wrapped_callback = cudm.WrappedTensorCallback(a_callback, cudm.CallbackDevice.GPU)
+ad_wrapped_callback = cudm.WrappedTensorCallback(ad_callback, cudm.CallbackDevice.GPU)
 
 
 @jax.jit
@@ -30,34 +61,10 @@ def main():
         dtype=dtype)
     jax.debug.print("Defined input state data buffer.")
 
-    # Adding a small number to ad_data_empty to avoid JAX aliasing the arrays.
-    n_data_empty = jnp.zeros((space_mode_extents[0], space_mode_extents[0]), dtype=dtype)
-    a_data_empty = jnp.zeros((space_mode_extents[1], space_mode_extents[1]), dtype=dtype)
-    ad_data_empty = jnp.zeros((space_mode_extents[1], space_mode_extents[1]), dtype=dtype) + 1.0
+    n_data_empty = jax.ShapeDtypeStruct((space_mode_extents[0], space_mode_extents[0]), dtype)
+    a_data_empty = jax.ShapeDtypeStruct((space_mode_extents[1], space_mode_extents[1]), dtype)
+    ad_data_empty = jax.ShapeDtypeStruct((space_mode_extents[1], space_mode_extents[1]), dtype)
     jax.debug.print("Defined elementary operator data buffers.")
-
-    def n_callback(time, params, storage):
-        storage[:] = 0.0
-        dim = storage.shape[0]
-        for i in range(dim):
-            storage[i, i] = i
-
-    def a_callback(time, params, storage):
-        storage[:] = 0.0
-        dim = storage.shape[0]
-        for i in range(1, dim):
-            storage[i - 1, i] = cp.sqrt(i)
-
-    def ad_callback(time, params, storage):
-        storage[:] = 0.0
-        dim = storage.shape[0]
-        for i in range(1, dim):
-            storage[i, i - 1] = cp.sqrt(i)
-
-    n_wrapped_callback = cudm.WrappedTensorCallback(n_callback, cudm.CallbackDevice.GPU)
-    a_wrapped_callback = cudm.WrappedTensorCallback(a_callback, cudm.CallbackDevice.GPU)
-    ad_wrapped_callback = cudm.WrappedTensorCallback(ad_callback, cudm.CallbackDevice.GPU)
-    jax.debug.print("Defined callbacks for elementary operators.")
 
     # Create elementary operators from the data arrays.
     n_elem_op = ElementaryOperator(n_data_empty, callback=n_wrapped_callback)

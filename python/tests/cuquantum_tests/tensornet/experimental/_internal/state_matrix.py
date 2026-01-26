@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -28,7 +28,6 @@ def get_cirq_random_2q_gate(rng):
     random_gate = cirq.MatrixGate(random_unitary)
     return random_gate
 
-
 def gen_random_layered_cirq_circuit(qubits, num_random_layers, rng):
     n_qubits = len(qubits)
     operations = []
@@ -36,7 +35,6 @@ def gen_random_layered_cirq_circuit(qubits, num_random_layers, rng):
         for i in range(n%2, n_qubits-1, 2):
             operations.append(get_cirq_random_2q_gate(rng).on(qubits[i], qubits[i+1]))
     return cirq.Circuit(operations)
-
 
 def cirq_insert_random_layers(circuit, num_random_layers, rng):
     if num_random_layers == 0:
@@ -54,7 +52,6 @@ def gen_random_layered_qiskit_circuit(qubits, num_random_layers, rng):
             circuit.append(get_qiskit_unitary_gate(rng), qubits[i:i+2])
     return circuit
 
-
 def qiskit_insert_random_layers(circuit, num_random_layers, rng):
     if num_random_layers == 0:
         return circuit
@@ -63,7 +60,6 @@ def qiskit_insert_random_layers(circuit, num_random_layers, rng):
     pre_circuit = gen_random_layered_qiskit_circuit(qubits, num_random_layers, rng)
     circuit.data = pre_circuit.data + circuit.data
     return circuit
-
 
 class StateMatrixABC(CircuitMatrixABC):
     pass
@@ -81,9 +77,8 @@ qiskit_L2_circuits = [
     for i, circuit in enumerate(QiskitCircuitMatrix.L2())
 ]
 
-
 class QiskitCircuitStateMatrix(StateMatrixABC):
-
+    
     @staticmethod
     def L0():
         return qiskit_L0_circuits
@@ -95,7 +90,6 @@ class QiskitCircuitStateMatrix(StateMatrixABC):
     @staticmethod
     def L2():
         return qiskit_L2_circuits
-
 
 cirq_L0_circuits = [
     cirq_insert_random_layers(circuit, 1, np.random.default_rng(i))
@@ -109,6 +103,7 @@ cirq_L2_circuits = [
     cirq_insert_random_layers(circuit, 2, np.random.default_rng(i))
     for i, circuit in enumerate(CirqCircuitMatrix.L2())
 ]
+
 class CirqCircuitStateMatrix(StateMatrixABC):
 
     @staticmethod
@@ -123,7 +118,6 @@ class CirqCircuitStateMatrix(StateMatrixABC):
     def L2():
         return cirq_L2_circuits
 
-
 class CircuitStateMatrix(StateMatrixABC):
 
     @staticmethod
@@ -137,7 +131,7 @@ class CircuitStateMatrix(StateMatrixABC):
     @staticmethod
     def L2():
         return CirqCircuitStateMatrix.L2() + QiskitCircuitStateMatrix.L2()
-
+    
 
 rng_iterator = get_rng_iterator()
 array_framework_iterator = get_array_framework_iterator()
@@ -145,12 +139,16 @@ array_framework_iterator = get_array_framework_iterator()
 def create_state_factory(*args, **kwargs):
     return StateFactory(*args, **kwargs, backend=next(array_framework_iterator))
 
+
 generic_states_L0 = [
     create_state_factory(4, "float32", "SDDS", next(rng_iterator)),
     create_state_factory(5, "float64", "SDMDS", next(rng_iterator), mpo_bond_dim=2),
     create_state_factory((2, 3, 4, 3, 2), "complex64", "SDM", next(rng_iterator), mpo_bond_dim=2),
     create_state_factory(4, "complex128", "SDCS", next(rng_iterator), ct_target_place="first"),
     create_state_factory((2, 5, 3, 2), "complex64", "SDDS", next(rng_iterator), initial_mps_dim=2),
+    create_state_factory((2, 5, 2, 2), "float64", "SDDD", next(rng_iterator), adjacent_double_layer=False),
+    # Diagonal gate test cases
+    create_state_factory(4, "complex128", "SADCAS", next(rng_iterator), ct_target_place="first"),
 ]
 
 generic_states_L1 = [
@@ -162,6 +160,12 @@ generic_states_L1 = [
     create_state_factory(6, "float64", "SDCS", next(rng_iterator), ct_target_place="first"),
     create_state_factory(4, "float64", "SDCS", next(rng_iterator), ct_target_place="middle"),
     create_state_factory(5, "float64", "SDCS", next(rng_iterator), ct_target_place="last", initial_mps_dim=2),
+    create_state_factory((2, 3, 3, 2, 2, 2), "float64", "SMDD", next(rng_iterator), mpo_bond_dim=2, adjacent_double_layer=False),
+    # Diagonal gate test cases
+    # {S, D, A}: all dtypes, exact simulation
+    create_state_factory(4, "float32", "SADAAA", next(rng_iterator), adjacent_double_layer=False),
+    create_state_factory((2, 5, 3, 2), "complex64", "SADA", next(rng_iterator), adjacent_double_layer=True),
+    create_state_factory((2, 3, 2, 3, 4, 2), "complex128", "ASDA", next(rng_iterator), adjacent_double_layer=True),
 ]
 
 generic_states_L2 = [
@@ -171,10 +175,13 @@ generic_states_L2 = [
     create_state_factory(6, "float64", "SDCSD", next(rng_iterator), ct_target_place="middle", adjacent_double_layer=False),
     create_state_factory(5, "float64", "SDCDS", next(rng_iterator), ct_target_place="last", initial_mps_dim=2),
     create_state_factory(8, "complex128", "SDMDS", next(rng_iterator), mpo_bond_dim=2, mpo_num_sites=5, mpo_geometry="random-ordered", initial_mps_dim=2),
-    # qudits
     create_state_factory((3, 3, 3, 3, 3), "complex128", "SDMDS", next(rng_iterator), mpo_bond_dim=3, mpo_num_sites=4, mpo_geometry="random"),
     create_state_factory((2, 3, 2, 3, 4, 2), "complex128", "SDMDS", next(rng_iterator), mpo_bond_dim=2, mpo_geometry="adjacent-ordered"),
     create_state_factory((2, 5, 3, 2), "complex128", "SDMDS", next(rng_iterator), mpo_bond_dim=2, mpo_geometry="random", initial_mps_dim=2),
+    # Diagonal gate test cases
+    # {S, D, M, A}: double precision, approximate simulation
+    create_state_factory((2, 5, 3, 2), "float64", "SADMA", next(rng_iterator), mpo_bond_dim=2),
+    create_state_factory((2, 3, 2, 3, 4, 2), "complex128", "SADA", next(rng_iterator), initial_mps_dim=2),
 ]
 
 class GenericStateMatrix(StateMatrixABC):
@@ -186,11 +193,11 @@ class GenericStateMatrix(StateMatrixABC):
     @staticmethod
     def L1():
         return generic_states_L1
-    
+
     @staticmethod
     def L2():
         return generic_states_L2
-    
+
 
 exact_mps_configs = [
     MPSConfig(mpo_application='exact', gauge_option='free'),
@@ -244,11 +251,14 @@ class SimulationConfigMatrix:
     def exactConfigs():
         return [TNConfig()] + MPSConfigMatrix.exactConfigs()
 
+
 noisy_state_tests_L0 = [
     create_state_factory(4, "float32", "SDUDS", next(rng_iterator)),
     create_state_factory(4, "float64", "SDGDS", next(rng_iterator)),
     create_state_factory(5, "complex64", "SDuMS", next(rng_iterator), mpo_bond_dim=2),
     create_state_factory(5, "complex128", "SDgDS", next(rng_iterator), initial_mps_dim=2),
+    # Diagonal gate test cases
+    create_state_factory(5, "complex128", "SDgADS", next(rng_iterator), initial_mps_dim=2)
 ]
 
 noisy_state_tests_L1 = [
@@ -259,6 +269,9 @@ noisy_state_tests_L1 = [
     create_state_factory(6, "complex128", "SDuMS", next(rng_iterator), mpo_bond_dim=2, initial_mps_dim=2),
     create_state_factory(5, "complex128", "SDgMDS", next(rng_iterator), mpo_bond_dim=2, mpo_num_sites=3, mpo_geometry="random"),
     create_state_factory(5, "complex128", "SDuDgDS", next(rng_iterator)),
+    # Diagonal gate test cases
+    create_state_factory(6, "complex128", "SDAuDS", next(rng_iterator), initial_mps_dim=3),
+    create_state_factory(6, "complex128", "SADgDS", next(rng_iterator), adjacent_double_layer=False),
 ]
 
 class NoisyStateMatrix(StateMatrixABC):

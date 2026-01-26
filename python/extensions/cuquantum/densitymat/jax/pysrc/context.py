@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -8,13 +8,14 @@ cuDensityMat context classes.
 
 import atexit
 import logging
+from typing import List
 
 import jax
 
 from cuquantum.bindings import cudensitymat as cudm
 from nvmath.internal import typemaps
 
-from .operators import ElementaryOperator, MatrixOperator, OperatorTerm, Operator
+from .operator import Operator
 
 
 class CudensitymatContext:
@@ -28,7 +29,7 @@ class CudensitymatContext:
 
     _handle = None
     _workspace_desc = None
-    _operators = set()
+    _operator_ptrs = set()  # Store only pointers, not operator objects (to avoid leaking tracers)
     _contexts = {}
 
     logger = logging.getLogger("cudensitymat-jax.CudensitymatContext")
@@ -41,9 +42,11 @@ class CudensitymatContext:
         if cls._handle is None:
             cls.logger.info(f"Initializing CudensitymatContext")
             cls._handle = cudm.create()
+            cls.logger.info(f"Created handle at {hex(cls._handle)}")
 
             if cls._workspace_desc is None:
                 cls._workspace_desc = cudm.create_workspace(cls._handle)
+                cls.logger.info(f"Created workspace descriptor at {hex(cls._workspace_desc)}")
             else:  # handle is None but workspace is not None
                 raise RuntimeError("Workspace descriptor and handle should be created at the same time")
         else:
@@ -58,14 +61,16 @@ class CudensitymatContext:
         cls._maybe_create_handle_and_workspace()
 
         # Check if there is already a context for the operator and if not, create it.
-        # NOTE: Registered operators are recorded using the Python object. _contexts is indexed by
-        # opaque pointers instead since the operator objects themselves change when they are
-        # flattened and unflattened during PyTree manipulation.
-        if op not in cls._operators:
-            cls._operators.add(op)
-
+        # NOTE: We check if a context exists using the operator's pointer. The pointer is created
+        # during context initialization, so we check if it's already been set and has a context.
+        # We only store the operator pointer, not the operator object itself, to avoid
+        # leaking JAX tracers when the operator is used inside transformations like jax.vjp.
+        # _contexts is indexed by opaque pointers since the operator objects themselves change
+        # when they are flattened and unflattened during PyTree manipulation.
+        if op._ptr is None or op._ptr not in cls._contexts:
             ctx = OperatorActionContext(op, device, batch_size, purity)
             cls._contexts[op._ptr] = ctx
+            cls._operator_ptrs.add(op._ptr)
 
             cls.logger.info(f"Created OperatorActionContext for operator {hex(id(op))}")
 
@@ -81,26 +86,19 @@ class CudensitymatContext:
     def free(cls):
         """
         Free opaque handles to the library.
+        
+        Note: We don't store operator objects in contexts to avoid leaking JAX tracers.
+        Operator objects and their GPU handles will be cleaned up by Python's garbage
+        collector when they're no longer referenced. Here we only clean up the state
+        handles and workspace that are managed by contexts.
         """
-        op_terms = set()
-        base_ops = set()
+        cls.logger.info(f"Freeing CudensitymatContext")
 
-        for op in cls._operators:
-            op._destroy()
-            op_terms.update(jax.tree.leaves(op, is_leaf=lambda x: isinstance(x, OperatorTerm)))
-            base_ops.update(jax.tree.leaves(op, is_leaf=lambda x: isinstance(x, (ElementaryOperator, MatrixOperator))))
-
-        for op_term in op_terms:
-            op_term._destroy()
-
-        for base_op in base_ops:
-            base_op._destroy()
-
+        # Free all state handles from contexts
         for ctx in cls._contexts.values():
             ctx.free()
 
-        cls.logger.info(f"Freeing CudensitymatContext")
-
+        # Free workspace and library handle
         if cls._workspace_desc is not None:
             cudm.destroy_workspace(cls._workspace_desc)
             cls._workspace_desc = None
@@ -108,6 +106,10 @@ class CudensitymatContext:
         if cls._handle is not None:
             cudm.destroy(cls._handle)
             cls._handle = None
+
+        # Clear tracking dictionaries
+        CudensitymatContext._operator_ptrs.clear()
+        CudensitymatContext._contexts.clear()
 
 
 atexit.register(CudensitymatContext.free)
@@ -138,7 +140,6 @@ class OperatorActionContext:
         self.logger.info(f"Initializing OperatorActionContext")
 
         # Instance attributes.
-        self.operator = op
         self.device = device
         self.batch_size = batch_size
         self.state_purity = purity
@@ -152,8 +153,9 @@ class OperatorActionContext:
         self._required_buffer_size = 0
 
         # Create opaque handle to the operator.
-        self.operator._create(CudensitymatContext._handle)
-        self._operator = self.operator._ptr
+        op._create(CudensitymatContext._handle)
+        self._operator = op._ptr
+        # Note: We don't store the operator object to avoid leaking JAX tracers
 
         # Create opaque handles to the input and output states.
         self._state_in = cudm.create_state(
@@ -179,6 +181,13 @@ class OperatorActionContext:
         # The state adjoints are to be set in create_adjoint_buffers when backward rule is called.
         self._state_in_adj = None
         self._state_out_adj = None
+
+        # Attributes to be assigned in operator_action.
+        self.base_op_ptrs: List[int] | None = None
+        self.is_elem_op: List[int] | None = None
+        self.num_state_components: int | None = None
+        self.op_term_batched_coeffs_tmp: List[int] | None = None
+        self.op_prod_batched_coeffs_tmp: List[int] | None = None
 
     def create_adjoint_buffers(self):
         """
@@ -230,7 +239,3 @@ class OperatorActionContext:
             cudm.destroy_state(self._state_in)
             self.logger.debug(f"Destroyed input state at {hex(self._state_in)}")
             self._state_in = None
-
-        if self._operator is not None:
-            self.operator._destroy()
-            self._operator = None

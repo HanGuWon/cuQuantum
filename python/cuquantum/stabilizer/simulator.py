@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -268,12 +268,12 @@ class FrameSimulator:
         num_qubits: Number of qubits in the simulation.
         num_paulis: Number of Pauli frame samples (shots).
         num_measurements: Number of measurements in the circuit (default: 0).
-        randomize_measurements: Whether to randomize frame after measurements (default: True).
+        randomize_measurements: Whether to randomize frame after measurements (default: `True`).
         x_table: Optional initial X bit table. If provided, memory is not owned by simulator.
         z_table: Optional initial Z bit table. If provided, memory is not owned by simulator.
         measurement_table: Optional initial measurement table.
         bit_packed: Whether the input tables are in bit-packed format.
-        package: Package to use for the tables. "numpy" or "cupy". This has
+        package: Package to use for the tables. ``"numpy"`` or ``"cupy"``. This has
                     lower priority than the package of the input tables, if any.
         random_seed: Random seed for the simulation (default: None).
         stream: Optional CUDA stream.
@@ -320,10 +320,10 @@ class FrameSimulator:
         If input bit tables are not provided, the simulator will allocate internal memory and own it.
         The simulator converts inputs and owns the converted tables if the input is
 
-        1. a :py:class:`numpy.ndarray` and `bit_packed=False`
-        2. a :py:class:`cupy.ndarray` and `bit_packed=False`
+        1. a :py:class:`numpy.ndarray` and ``bit_packed=False``
+        2. a :py:class:`cupy.ndarray` and ``bit_packed=False``
 
-        If input is a :py:class:`cupy.ndarray` and `bit_packed=True`, the simulator will not allocate internal memory
+        If input is a :py:class:`cupy.ndarray` and ``bit_packed=True``, the simulator will not allocate internal memory
         and will use the provided tables.
 
         Args:
@@ -336,10 +336,10 @@ class FrameSimulator:
             z_table: Pre-allocated Z bit table.
             measurement_table: Pre-allocated measurement table.
             bit_packed: Whether the input tables are in bit-packed format.
-            package: Package to use for the tables, either `"numpy"` or `"cupy"`. This has
+            package: Package to use for the tables, either ``"numpy"`` or ``"cupy"``. This has
                     lower priority than the package of the input tables, if any.
             seed: Seed for a generator that will produce default seed for every
-                  call of :py:meth:`apply`.
+                  call of :meth:`apply`.
             stream: Optional CUDA stream.
             options: Optional Options configuration.
         """
@@ -481,19 +481,18 @@ class FrameSimulator:
         """Retrieve the X and Z Pauli tables.
 
         Args:
-            bit_packed: If True, return as bit-packed arrays (default).
-                        If False, unpack bits and return as (num_qubits, num_paulis) arrays.
+            bit_packed: If `True`, return as bit-packed arrays (default).
+                If `False`, unpack bits and return as (num_qubits, num_paulis) arrays.
 
         Returns:
             PauliTable object.
 
 
-        The 
-            If bit_packed=False, and `self.operands_package` is cupy, the
-            returned PauliTable has a view into the simulator state. 
-            That is, the contents of PauliTable can be indirectly changed by the
-            simulator.
-            In other cases, the returned PauliTable references a copy of the simulator state.
+        If ``bit_packed=False``, and :attr:`operands_package` is cupy, the
+        returned PauliTable has a view into the simulator state. 
+        That is, the contents of PauliTable can be indirectly changed by the
+        simulator.
+        In other cases, the returned PauliTable references a copy of the simulator state.
 
         Example:
             >>> sim = FrameSimulator(2, 1024)
@@ -516,18 +515,19 @@ class FrameSimulator:
     def get_pauli_xz_bits(self, bit_packed: bool = True) -> Tuple[Array, Array]:
         """
         Get the X and Z bits as raw arrays.
+
         Args:
             bit_packed: If True, return as bit-packed arrays (default).
-                       If False, unpack bits and return as (num_qubits, num_paulis) arrays.
+                If False, unpack bits and return as (num_qubits, num_paulis) arrays.
 
         Returns:
             Tuple of (x_bits, z_bits) as arrays.
 
-        The package of arrays is determined by `self.operands_package`, which is
+        The package of arrays is determined by :attr:`operands_package`, which is
         set by the last call to set_input_tables or the package parameter to
         constructor.
 
-        If bit_packed=False, and package is cupy, the returned arrays are views
+        If ``bit_packed=False``, and package is cupy, the returned arrays are views
         into the simulator state.
         In other cases, the returned arrays are copies of the simulator state.
 
@@ -560,14 +560,13 @@ class FrameSimulator:
 
         Args:
             bit_packed: If `True`, return as bit-packed array (default).
-                       If `False`, unpack bits and return as (num_measurements, num_paulis) array.
+                If `False`, unpack bits and return as (num_measurements, num_paulis) array.
 
         Returns:
             Measurement results array.
 
-        If `bit_packed=False`, and :py:attr:`FrameSimulator.operands_package` tt
-        :py:attr:`operands_package` is `"cupy"`, the returned array is a view
-        into the simulator state.
+        If ``bit_packed=False``, and :attr:`FrameSimulator.operands_package` is ``"cupy"``, the
+        the returned array is a view into the simulator state.
         In other cases, the returned array is a copy of the simulator state.
 
         Example:
@@ -604,13 +603,13 @@ class FrameSimulator:
             z_table: New Z bit table. Must be the same package and shape as x_table.
             m_table: New measurement table.
             bit_packed: If `True`, input is expected to be bit-packed (default).
-                        If `False`, will pack bits automatically
+                If `False`, will pack bits automatically
             stream: Optional CUDA stream for the operation.
 
-        The tables can be located either on CPU or device as specified by :py:attr:`device_id`.
-        This call will update :py:attr:`operands_package`.
-        The returned data from subsequent calls to :py:meth:`get_pauli_table`, :py:meth:`get_pauli_xz_bits`,
-        and :py:meth:`get_measurement_bits` will be of the same type and device as the input tables.
+        The tables can be located either on CPU or device as specified by :attr:`device_id`.
+        This call will update :attr:`operands_package`.
+        The returned data from subsequent calls to :meth:`get_pauli_table`, :meth:`get_pauli_xz_bits`,
+        and :meth:`get_measurement_bits` will be of the same type and device as the input tables.
 
         Example:
             >>> sim = FrameSimulator(2, 1024)

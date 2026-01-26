@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2025, NVIDIA CORPORATION & AFFILIATES.
+# Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -7,6 +7,7 @@ CUDA_PATH        := ${CUDA_PATH}
 CUDENSITYMAT_ROOT ?= ${CUQUANTUM_ROOT}
 CUTENSORNET_ROOT  ?= ${CUQUANTUM_ROOT}
 MPI_ROOT         := ${MPI_ROOT}
+NCCL_ROOT        := ${NCCL_ROOT}
 CUDA_MAJOR_VERSION := $(shell "${CUDA_PATH}/bin/"nvcc --version | egrep -o "V[0-9]+.[0-9]+.[0-9]" | cut -d. -f1 | cut -c2-)
 CUDA_MINOR_VERSION := $(shell "${CUDA_PATH}/bin/"nvcc --version | egrep -o "V[0-9]+.[0-9]+.[0-9]" | cut -d. -f2)
 
@@ -17,6 +18,19 @@ else ifeq ($(shell test -d "${CUTENSOR_ROOT}/lib/aarch64-linux-gnu" && echo "exi
   CUTENSOR_LIB_DIR := ${CUTENSOR_ROOT}/lib/aarch64-linux-gnu
 else
   CUTENSOR_LIB_DIR := ${CUTENSOR_ROOT}/lib
+endif
+
+# Auto-detect NCCL library (handles pip packages that only have versioned .so.2)
+ifdef NCCL_ROOT
+  ifeq ($(shell test -f "${NCCL_ROOT}/lib/libnccl.so" && echo "exists"),exists)
+    NCCL_LIB := ${NCCL_ROOT}/lib/libnccl.so
+  else ifeq ($(shell test -f "${NCCL_ROOT}/lib64/libnccl.so" && echo "exists"),exists)
+    NCCL_LIB := ${NCCL_ROOT}/lib64/libnccl.so
+  else ifeq ($(shell test -f "${NCCL_ROOT}/lib/libnccl.so.2" && echo "exists"),exists)
+    NCCL_LIB := ${NCCL_ROOT}/lib/libnccl.so.2
+  else ifeq ($(shell test -f "${NCCL_ROOT}/lib64/libnccl.so.2" && echo "exists"),exists)
+    NCCL_LIB := ${NCCL_ROOT}/lib64/libnccl.so.2
+  endif
 endif
 
 INCLUDE_DIRS     := -I${CUDENSITYMAT_ROOT}/include -I${CUTENSORNET_ROOT}/include -I${CUTENSOR_ROOT}/include
@@ -40,9 +54,17 @@ CXX_FLAGS        = -std=c++17 $(INCLUDE_DIRS) $(LIBRARY_DIRS) $(ARCH_FLAGS)
 all: check-env
 	${CUDA_PATH}/bin/nvcc operator_action_example.cpp ${CXX_FLAGS} -o operator_action_example
 	${CUDA_PATH}/bin/nvcc operator_action_gradient_example.cpp ${CXX_FLAGS} -o operator_action_gradient_example
+	${CUDA_PATH}/bin/nvcc operator_action_batched_gradient_example.cpp ${CXX_FLAGS} -o operator_action_batched_gradient_example
 	${CUDA_PATH}/bin/nvcc operator_eigenspectrum_example.cpp ${CXX_FLAGS} -o operator_eigenspectrum_example
   ifdef MPI_ROOT
-	${CUDA_PATH}/bin/nvcc operator_action_mpi_example.cpp ${CXX_FLAGS} -L${MPI_ROOT}/lib -lmpi -I${MPI_ROOT}/include -o operator_action_mpi_example
+	${CUDA_PATH}/bin/nvcc operator_action_mpi_example.cpp ${CXX_FLAGS} -DMPI_ENABLED -L${MPI_ROOT}/lib -lmpi -I${MPI_ROOT}/include -o operator_action_mpi_example
+  endif
+  ifdef NCCL_ROOT
+    ifdef MPI_ROOT
+      ifdef NCCL_LIB
+	${CUDA_PATH}/bin/nvcc operator_action_nccl_example.cpp ${CXX_FLAGS} -DNCCL_ENABLED -DMPI_ENABLED -Xlinker ${NCCL_LIB} -I${NCCL_ROOT}/include -L${MPI_ROOT}/lib -lmpi -I${MPI_ROOT}/include -o operator_action_nccl_example
+      endif
+    endif
   endif
 
 operator_action_example:
@@ -51,12 +73,24 @@ operator_action_example:
 operator_action_gradient_example:
 	${CUDA_PATH}/bin/nvcc operator_action_gradient_example.cpp ${CXX_FLAGS} -o operator_action_gradient_example
 
+operator_action_batched_gradient_example:
+	${CUDA_PATH}/bin/nvcc operator_action_batched_gradient_example.cpp ${CXX_FLAGS} -o operator_action_batched_gradient_example
+
 operator_eigenspectrum_example:
 	${CUDA_PATH}/bin/nvcc operator_eigenspectrum_example.cpp ${CXX_FLAGS} -o operator_eigenspectrum_example
 
 ifdef MPI_ROOT
 operator_action_mpi_example:
-	${CUDA_PATH}/bin/nvcc operator_action_mpi_example.cpp ${CXX_FLAGS} -L${MPI_ROOT}/lib -lmpi -I${MPI_ROOT}/include -o operator_action_mpi_example
+	${CUDA_PATH}/bin/nvcc operator_action_mpi_example.cpp ${CXX_FLAGS} -DMPI_ENABLED -L${MPI_ROOT}/lib -lmpi -I${MPI_ROOT}/include -o operator_action_mpi_example
+endif
+
+ifdef NCCL_ROOT
+ifdef MPI_ROOT
+ifdef NCCL_LIB
+operator_action_nccl_example:
+	${CUDA_PATH}/bin/nvcc operator_action_nccl_example.cpp ${CXX_FLAGS} -DNCCL_ENABLED -DMPI_ENABLED -Xlinker ${NCCL_LIB} -I${NCCL_ROOT}/include -L${MPI_ROOT}/lib -lmpi -I${MPI_ROOT}/include -o operator_action_nccl_example
+endif
+endif
 endif
 
 check-env:
@@ -65,7 +99,9 @@ check-env:
 	echo "CUDENSITYMAT_ROOT=${CUDENSITYMAT_ROOT}"; \
 	echo "CUTENSOR_ROOT=${CUTENSOR_ROOT}"; \
 	echo "CUTENSOR_LIB_DIR=${CUTENSOR_LIB_DIR}"; \
-    echo "MPI_ROOT=${MPI_ROOT}"; \
+	echo "MPI_ROOT=${MPI_ROOT}"; \
+	echo "NCCL_ROOT=${NCCL_ROOT}"; \
+	echo "NCCL_LIB=${NCCL_LIB}"; \
 	echo ""; \
 	if [[ -z "${CUDENSITYMAT_ROOT}" ]]; \
 	then \
@@ -77,11 +113,28 @@ check-env:
 	then \
 		echo "" && \
 		echo "MPI_ROOT is not set. Please set MPI_ROOT if you would like to build the distributed example(s)." && \
-        echo ""; \
+		echo ""; \
+	fi; \
+	if [[ -z "${NCCL_ROOT}" ]]; \
+	then \
+		echo "" && \
+		echo "NCCL_ROOT is not set. Please set NCCL_ROOT if you would like to build the NCCL example." && \
+		echo ""; \
+	elif [[ -z "${NCCL_LIB}" ]]; \
+	then \
+		echo "" && \
+		echo "NCCL_ROOT is set but libnccl.so or libnccl.so.2 was not found in ${NCCL_ROOT}/lib or ${NCCL_ROOT}/lib64." && \
+		echo ""; \
 	fi
 
 clean:
-	rm -f operator_action_example operator_action_example.o operator_action_gradient_example operator_action_gradient_example.o operator_eigenspectrum_example operator_eigenspectrum_example.o
+	rm -f operator_action_example operator_action_example.o
+	rm -f operator_action_gradient_example operator_action_gradient_example.o
+	rm -f operator_action_batched_gradient_example operator_action_batched_gradient_example.o
+	rm -f operator_eigenspectrum_example operator_eigenspectrum_example.o
 ifdef MPI_ROOT
 	rm -f operator_action_mpi_example operator_action_mpi_example.o
+endif
+ifdef NCCL_ROOT
+	rm -f operator_action_nccl_example operator_action_nccl_example.o
 endif

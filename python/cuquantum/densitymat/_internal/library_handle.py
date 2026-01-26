@@ -4,10 +4,14 @@
 from logging import Logger
 import weakref
 import collections
-from typing import Sequence, Tuple
+from typing import Optional, Sequence, Tuple, Union, TYPE_CHECKING
+
+import numpy as np
+
+if TYPE_CHECKING:
+    import mpi4py.MPI
 
 from nvmath.internal import utils as nvmath_utils
-
 from cuquantum._internal import utils as cutn_utils
 
 from cuquantum.bindings import cudensitymat as cudm
@@ -18,7 +22,7 @@ from . import utils
 _comm_provider_map = {}
 _comm_provider_map["None"] = cudm.DistributedProvider.NONE
 _comm_provider_map["MPI"] = cudm.DistributedProvider.MPI
-# _comm_provider_map["NCCL"] = cudm.DistributedProvider.NCCL
+_comm_provider_map["NCCL"] = cudm.DistributedProvider.NCCL
 # _comm_provider_map["NVSHMEM"] = cudm.DistributedProvider.NVSHMEM
 
 
@@ -47,6 +51,7 @@ class LibraryHandle:
         self.logger = logger
         self._comm = None
         self._comm_set = False
+        self._nccl_comm_holder = None  # Numpy array holding ncclComm_t pointer for stable address
         self.logger.info(f"cuDensityMat library handle created on device {self.device_id}.")
         self.logger.debug(
             f"{self} instance holds cuDensityMat library handle with pointer {self._ptr} on device {self.device_id}."
@@ -80,7 +85,9 @@ class LibraryHandle:
         return self._device_id
 
     def set_communicator(
-        self, comm: "mpi4py.MPI.Comm" | Tuple[int, int], provider: str = "None"
+        self,
+        comm: "mpi4py.MPI.Comm" | Tuple[int, int] | int | None = None,
+        provider: str = "None",
     ) -> None:
         """
         Sets the communicator attached to the current context's library handle.
@@ -88,27 +95,99 @@ class LibraryHandle:
         Parameters:
         -----------
         comm:
-            The communicator instance with which to set the library context's communicator.
-            Can either be specified as an instance of `mpi4py.Comm` or
-            as a tuple of two integers (the pointer to the communicator and its size).
+            The communicator instance. Accepted types depend on the provider:
+            
+            - For "MPI": an ``mpi4py.MPI.Comm`` instance, an integer pointer, or a tuple of (pointer, size).
+            - For "NCCL":
+                - An integer pointer or a tuple of (pointer, size) is required and is assumed to be an ``ncclComm_t`` pointer.
+            - For "None": comm should be ``None``.
+            
         provider: str
-            The package/backend providing the communicator.
+            The communication backend: "None", "MPI", or "NCCL".
         """
         if self._comm_set:
             raise RuntimeError(
-                "Communicator has already been set on library handle.\
-            Resetting the communicator is not supported."
+                "Communicator has already been set on library handle. "
+                "Resetting the communicator is not supported."
             )
-        assert provider in ["None", "MPI"]
+
+        if provider not in _comm_provider_map:
+            raise ValueError(
+                f"Unknown provider: {provider}. Supported: {list(_comm_provider_map.keys())}"
+            )
+
+        if provider == "NCCL":
+            self._set_nccl_communicator(comm)
+        elif provider == "MPI":
+            self._set_mpi_communicator(comm)
+        else:  # provider == "None"
+            cudm.reset_distributed_configuration(
+                self._validated_ptr, _comm_provider_map["None"], 0, 0
+            )
+
+        self._comm_set = True
+
+    def _set_mpi_communicator(
+        self, comm: Union["mpi4py.MPI.Comm", Tuple[int, int], int]
+    ) -> None:
+        """Set MPI as the distributed provider."""
+        if comm is None:
+            raise ValueError(
+                "MPI provider requires an explicit communicator. "
+                "Pass an mpi4py.MPI.Comm or a (pointer, size) tuple."
+            )
+
         self._comm = comm
         if isinstance(comm, Sequence):
             _comm_ptr, _size = comm
+        elif isinstance(comm, int):
+            _comm_ptr = comm
+            _size = np.dtype(np.intp).itemsize
         else:
             _comm_ptr, _size = cutn_utils.get_mpi_comm_pointer(comm)
         cudm.reset_distributed_configuration(
-            self._validated_ptr, _comm_provider_map[provider], _comm_ptr, _size
+            self._validated_ptr, _comm_provider_map["MPI"], _comm_ptr, _size
         )
-        self._comm_set = True
+
+    def _set_nccl_communicator(self, comm: Tuple[int, int] | int) -> None:
+        """
+        Set NCCL as the distributed provider.
+
+        The NCCL communicator must be provided as an integer pointer or a tuple of (pointer, size).
+        """
+        if comm is None:
+            raise ValueError(
+                "NCCL provider requires an explicit communicator. "
+                "Pass an integer pointer or a (pointer, size) tuple for an existing ncclComm_t."
+            )
+
+        if isinstance(comm, Sequence) and len(comm) == 2:
+            # Explicit (pointer, size) tuple provided - assume ncclComm_t pointer (user-managed)
+            nccl_comm_ptr = comm[0]
+        elif isinstance(comm, int):
+            nccl_comm_ptr = comm
+        else:
+            raise ValueError(
+                "NCCL provider requires an ncclComm_t pointer or (pointer, size) tuple."
+            )
+
+        self.logger.info(
+            f"Using explicit ncclComm_t pointer (comm_ptr={nccl_comm_ptr}) on device {self.device_id}."
+        )
+
+        # Pass the ncclComm_t pointer directly (like MPI passes MPI_Comm*)
+        # Store in numpy array to get stable address; np.intp matches pointer size
+        nccl_comm_holder = np.array([nccl_comm_ptr], dtype=np.intp)
+        cudm.reset_distributed_configuration(
+            self._validated_ptr,
+            _comm_provider_map["NCCL"],
+            nccl_comm_holder.ctypes.data,
+            nccl_comm_holder.itemsize,
+        )
+
+        # All configuration succeeded - now update instance state
+        self._comm = nccl_comm_ptr
+        self._nccl_comm_holder = nccl_comm_holder
 
     def get_communicator(self):
         """
