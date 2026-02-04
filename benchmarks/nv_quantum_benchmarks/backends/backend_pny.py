@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -19,6 +19,7 @@ except ImportError:
     _internal_utils = None
 from .backend import Backend
 from ..constants import LOGGER_NAME
+from .._utils import get_mpi_size
 
 
 # set up a logger
@@ -38,6 +39,33 @@ class Pennylane(Backend):
         self.version = self.find_version(identifier) 
         self.meta = {}
         self.meta['ncputhreads'] = ncpu_threads
+
+    def find_version(self, identifier):
+        if self.ngpus > 1:
+            raise ValueError("To specify the number of GPUs for pennylane-lightning-gpu and pennylane-lightning-kokkos, run with MPI support. \
+                The total number of MPI processes determines how many GPUs will be used; \
+                for example, launching with 4 MPI processes (mpirun -np 4 ...) utilizes 4 GPUs, it should be power of 2.")
+
+        if identifier == "pennylane-lightning-gpu":
+            try:
+                from pennylane_lightning.lightning_gpu import LightningGPU # version >= 0.33.0
+                return LightningGPU.version
+            except ImportError:
+                raise RuntimeError("PennyLane-Lightning-GPU plugin is not installed")
+        elif identifier == "pennylane-lightning-kokkos":
+            try:
+                from pennylane_lightning.lightning_kokkos import LightningKokkos # version >= 0.33.0
+                return LightningKokkos.version
+            except ImportError:
+                raise RuntimeError("PennyLane-Lightning-Kokkos plugin is not installed")
+        elif identifier == "pennylane-lightning-qubit":
+            try:
+                from pennylane_lightning.lightning_qubit import LightningQubit # version >= 0.33.0
+                return LightningQubit.version
+            except ImportError as e:
+                raise RuntimeError("PennyLane-Lightning plugin is not installed") from e
+        else: # identifier == "pennylane"
+            return pennylane.__version__
 
     def preprocess_circuit(self, circuit, *args, **kwargs):
         if _internal_utils is not None:
@@ -65,70 +93,17 @@ class Pennylane(Backend):
         pre_data = self.meta
         return pre_data
 
-    def find_version(self, identifier):
-        if identifier == "pennylane-lightning-gpu":
-            if self.ngpus == 1:
-                try:
-                    from pennylane_lightning.lightning_gpu import LightningGPU
-                    return LightningGPU.version
-                except ImportError:
-                    try: # pre pennylane_lightning 0.33.0 version
-                        import pennylane_lightning_gpu
-                        return pennylane_lightning_gpu.__version__
-                    except ImportError:
-                        raise RuntimeError("PennyLane-Lightning-GPU plugin is not installed")
-            else:
-                raise ValueError(f"cannot specify --ngpus > 1 for the backend {identifier}")
-        elif identifier == "pennylane-lightning-kokkos":
-            try:
-                from pennylane_lightning.lightning_kokkos import LightningKokkos
-                return LightningKokkos.version
-            except ImportError:
-                try: # pre pennylane_lightning 0.33.0 version
-                    import pennylane_lightning_kokkos
-                    return pennylane_lightning_kokkos.__version__
-                except ImportError:
-                    raise RuntimeError("PennyLane-Lightning-Kokkos plugin is not installed")
-        elif identifier == "pennylane-lightning-qubit":
-            try:
-                from pennylane_lightning import lightning_qubit
-                return lightning_qubit.__version__
-            except ImportError as e:
-                raise RuntimeError("PennyLane-Lightning plugin is not installed") from e
-        else: # identifier == "pennylane"
-            return pennylane.__version__
-        
     def _make_device(self, nshots=None, **kwargs):
         if self.identifier == "pennylane-lightning-gpu":
-            dev = pennylane.device("lightning.gpu", wires=self.nqubits, shots=nshots, c_dtype=self.dtype)
+            if get_mpi_size() > 1: # for new versions, such as versions >= 0.42.0
+                dev = pennylane.device("lightning.gpu", wires=self.nqubits, shots=nshots, c_dtype=self.dtype, mpi=True)
+            else:
+                dev = pennylane.device("lightning.gpu", wires=self.nqubits, shots=nshots, c_dtype=self.dtype)
         elif self.identifier == "pennylane-lightning-kokkos":
-            # there's no way for us to query what execution space (=backend) that kokkos supports at runtime,
-            # so let's just set up Kokkos::InitArguments and hope kokkos to do the right thing...
-            dev = None
-            try:
-                if self.ncpu_threads > 1 :
-                    warnings.warn(f"--ncputhreads is ignored for {self.identifier}", stacklevel=2)
-                dev = pennylane.device(
-                "lightning.kokkos", wires=self.nqubits, shots=nshots, c_dtype=self.dtype,
-                sync=False)
-            except ImportError:
-                try: # pre pennylane_lightning 0.33.0 version
-                    from pennylane_lightning_kokkos.lightning_kokkos import InitArguments
-                    args = InitArguments()
-                    args.num_threads = self.ncpu_threads
-                    args.disable_warnings = int(logger.getEffectiveLevel() != logging.DEBUG)
-                    ## Disable MPI because it's unclear if pennylane actually supports it (at least it's untested)
-                    # # if we're running MPI, we want to know now and get it init'd before kokkos is
-                    # MPI = is_running_mpi()
-                    # if MPI:
-                    #     comm = MPI.COMM_WORLD
-                    #     args.ndevices = min(comm.Get_size(), self.ngpus)  # note: kokkos uses 1 GPU per process
-                    dev = pennylane.device(
-                        "lightning.kokkos", wires=self.nqubits, shots=nshots, c_dtype=self.dtype,
-                        sync=False,
-                        kokkos_args=args)
-                except ImportError:
-                    raise RuntimeError("Could not load PennyLane-Lightning-Kokkos plugin. Is it installed?")
+            if get_mpi_size() > 1: # for new versions, such as versions >= 0.42.0
+                dev = pennylane.device("lightning.kokkos", wires=self.nqubits, shots=nshots, c_dtype=self.dtype, mpi=True)
+            else:
+                dev = pennylane.device("lightning.kokkos", wires=self.nqubits, shots=nshots, c_dtype=self.dtype) 
         elif self.identifier == "pennylane-lightning-qubit":
             if self.ngpus != 0:
                 raise ValueError(f"cannot specify --ngpus for the backend {self.identifier}")

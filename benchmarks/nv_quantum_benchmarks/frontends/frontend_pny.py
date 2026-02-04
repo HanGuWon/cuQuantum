@@ -1,9 +1,11 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
 import sys
 from cmath import pi, exp
+from packaging.version import Version
+
 try:
     import pennylane
 except ImportError:
@@ -52,13 +54,26 @@ class Pennylane(Frontend):
 
                 elif g.id =='czpowgate': 
                     CZPow_matrix = [[1,0],[0,exp(1j*pi*g.params)]]
-                    pennylane.ControlledQubitUnitary(CZPow_matrix,control_wires=g.controls, wires=g.targets)
+                    if Version(pennylane.__version__) >= Version("0.42.0"):
+                        # for versions >= 0.42.0
+                        controls = [g.controls] if isinstance(g.controls, int) else g.controls
+                        targets = [g.targets] if isinstance(g.targets, int) else g.targets
+                        pennylane.ControlledQubitUnitary(CZPow_matrix, wires=controls+targets)
+                    else:
+                        pennylane.ControlledQubitUnitary(CZPow_matrix, control_wires=g.controls, wires=g.targets)
+
 
                 elif g.id =='swap': 
                     pennylane.SWAP(wires=[g.targets[0], g.targets[1]])
 
                 elif g.id =='cu': 
-                    pennylane.ControlledQubitUnitary(g.matrix, control_wires=g.controls, wires=g.targets)
+                    if Version(pennylane.__version__) >= Version("0.42.0"):
+                        # for versions >= 0.42.0
+                        controls = [g.controls] if isinstance(g.controls, int) else g.controls
+                        targets = [g.targets] if isinstance(g.targets, int) else g.targets
+                        pennylane.ControlledQubitUnitary(g.matrix, wires=controls+targets)
+                    else:
+                        pennylane.ControlledQubitUnitary(g.matrix, control_wires=g.controls, wires=g.targets)
 
                 elif g.id == 'u':  
                     pennylane.QubitUnitary(g.matrix, wires=g.targets)

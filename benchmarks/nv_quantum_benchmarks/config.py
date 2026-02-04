@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -109,7 +109,7 @@ backends = {
     'aer': {
         'config': {
             'nshots': 1024,
-            'nfused': 5,
+            'nfused': None,
             'ngpus': 0,
             'ncputhreads': multiprocessing.cpu_count(),
             'precision':'single',
@@ -120,7 +120,7 @@ backends = {
     'aer-cuda': {
         'config': {
             'nshots': 1024,
-            'nfused': 5,
+            'nfused': None,
             'ngpus': 1,
             'ncputhreads': multiprocessing.cpu_count(),
             'precision':'single',
@@ -131,7 +131,7 @@ backends = {
     'aer-cusv': {
         'config': {
             'nshots': 1024,
-            'nfused': 5,
+            'nfused': None,
             'ngpus': 1,
             'ncputhreads': multiprocessing.cpu_count(),
             'precision':'single',
@@ -142,7 +142,7 @@ backends = {
     'cusvaer': {
         'config': {
             'nshots': 1024,
-            'nfused': 4,
+            'nfused': None,
             'ngpus': 1,
             'ncputhreads': multiprocessing.cpu_count(),
             'precision':'single',
@@ -153,7 +153,7 @@ backends = {
     'cirq': {
         'config': {
             'nshots': 1024,
-            'nfused': 4,
+            'nfused': None,
             'ngpus': 0,
             'ncputhreads': 1,
             'precision':'single',
@@ -164,7 +164,7 @@ backends = {
     'qsim': {
         'config': {
             'nshots': 1024,
-            'nfused': 2,
+            'nfused': 2, # No auto
             'ngpus': 0,
             'ncputhreads': multiprocessing.cpu_count(),
             'precision':'single',
@@ -175,7 +175,7 @@ backends = {
     'qsim-cuda': {
         'config': {
             'nshots': 1024,
-            'nfused': 2,
+            'nfused': 2, # No auto
             'ngpus': 1,
             'ncputhreads': 1,
             'precision':'single',
@@ -186,7 +186,7 @@ backends = {
     'qsim-cusv': {
         'config': {
             'nshots': 1024,
-            'nfused': 2,
+            'nfused': 2, # No auto
             'ngpus': 1,
             'ncputhreads': 1,
             'precision':'single',
@@ -197,7 +197,7 @@ backends = {
     'qsim-mgpu': {
         'config': {
             'nshots': 1024,
-            'nfused': 4,
+            'nfused': 4, # No auto
             'ngpus': 1,
             'ncputhreads': 1,
             'precision':'single',
@@ -274,7 +274,7 @@ backends = {
     'cudaq-cusv': {
         'config': {
             'nshots': 1024,
-            'nfused': 4,
+            'nfused': None,
             'ngpus': 1,
             'ncputhreads': 8,
             'precision': 'double',
@@ -285,7 +285,7 @@ backends = {
     'cudaq-mgpu': {
         'config': {
             'nshots': 1024,
-            'nfused': 4,
+            'nfused': None,
             'ngpus': 1,
             'ncputhreads': 8,
             'precision': 'double',

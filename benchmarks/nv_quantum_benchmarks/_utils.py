@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -337,15 +337,25 @@ class Gate:
         return s
 
 
-def gen_run_env(gpu_device_properties):
-    run_env = HashableDict({
+def gen_run_env(gpu_device_properties, cpu_only):
+    if cpu_only:
+        run_env = HashableDict({
+            'hostname': platform.node(),
+            'cpu_name': get_cpu_name(),
+            'gpu_name': None,
+            'gpu_driver_ver': None,
+            'gpu_runtime_ver': None,
+            'nvml_driver_ver': None,
+        })
+    else:
+        run_env = HashableDict({
         'hostname': platform.node(),
         'cpu_name': get_cpu_name(),
         'gpu_name': gpu_device_properties['name'].decode('utf-8'),
         'gpu_driver_ver': cp.cuda.runtime.driverGetVersion(),
         'gpu_runtime_ver': cp.cuda.runtime.runtimeGetVersion(),
         'nvml_driver_ver': get_gpu_driver_version(),
-    })
+        })
     return run_env
 
 
@@ -361,12 +371,13 @@ def report(perf_time, cuda_time, post_time, ngpus, run_env, gpu_device_propertie
     cpu_max_freq = psutil.cpu_freq().max
 
     gpu_name = run_env['gpu_name']
-    gpu_total_mem = round(gpu_device_properties['totalGlobalMem']/1000000000, 2)
-    gpu_clock_rate = round(gpu_device_properties['clockRate']/1000, 2)
-    gpu_multiprocessor_num = gpu_device_properties['multiProcessorCount']
-    gpu_driver_ver = run_env['gpu_driver_ver']
-    gpu_runtime_ver = run_env['gpu_runtime_ver']
-    nvml_driver_ver = run_env['nvml_driver_ver']
+    if gpu_device_properties is not None:
+        gpu_total_mem = round(gpu_device_properties['totalGlobalMem']/1000000000, 2)
+        gpu_clock_rate = round(gpu_device_properties['clockRate']/1000, 2)
+        gpu_multiprocessor_num = gpu_device_properties['multiProcessorCount']
+        gpu_driver_ver = run_env['gpu_driver_ver']
+        gpu_runtime_ver = run_env['gpu_runtime_ver']
+        nvml_driver_ver = run_env['nvml_driver_ver']
 
     logger.debug(f' - hostname: {hostname}')
     logger.info(f' - [CPU] Averaged elapsed time: {perf_time:.9f} s')
@@ -381,11 +392,12 @@ def report(perf_time, cuda_time, post_time, ngpus, run_env, gpu_device_propertie
     logger.info(' -')
     logger.info(f' - [GPU] Averaged elapsed time: {cuda_time:.9f} s {"(unused)" if ngpus == 0 else ""}')
     logger.info(f' - [GPU] GPU device name: {gpu_name}')
-    logger.debug(f' - [GPU] Total global memory: {gpu_total_mem} GB')
-    logger.debug(f' - [GPU] Clock frequency (Mhz): {gpu_clock_rate}')
-    logger.debug(f' - [GPU] Multi processor count: {gpu_multiprocessor_num}')
-    logger.debug(f' - [GPU] CUDA driver version: {gpu_driver_ver} ({nvml_driver_ver})')
-    logger.debug(f' - [GPU] CUDA runtime version: {gpu_runtime_ver}')
+    if gpu_device_properties is not None:
+        logger.debug(f' - [GPU] Total global memory: {gpu_total_mem} GB')
+        logger.debug(f' - [GPU] Clock frequency (Mhz): {gpu_clock_rate}')
+        logger.debug(f' - [GPU] Multi processor count: {gpu_multiprocessor_num}')
+        logger.debug(f' - [GPU] CUDA driver version: {gpu_driver_ver} ({nvml_driver_ver})')
+        logger.debug(f' - [GPU] CUDA runtime version: {gpu_runtime_ver}')
     logger.info('')
 
     benchmark_data['cpu_time'] = perf_time
@@ -396,9 +408,10 @@ def report(perf_time, cuda_time, post_time, ngpus, run_env, gpu_device_propertie
     benchmark_data['cpu_current_freq'] = cpu_curr_freq
 
     benchmark_data['gpu_time'] = cuda_time
-    benchmark_data['gpu_total_mem'] = gpu_total_mem
-    benchmark_data['gpu_clock_freq'] = gpu_clock_rate
-    benchmark_data['gpu_multiprocessor_num'] = gpu_multiprocessor_num
+    if gpu_device_properties is not None:
+        benchmark_data['gpu_total_mem'] = gpu_total_mem
+        benchmark_data['gpu_clock_freq'] = gpu_clock_rate
+        benchmark_data['gpu_multiprocessor_num'] = gpu_multiprocessor_num
 
     return benchmark_data
 

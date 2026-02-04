@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -25,6 +25,7 @@ from ._utils import (
 
 # set up a logger
 logger = logging.getLogger(LOGGER_NAME)
+CPU_BACKENDS = {'cudaq-cpu', 'qulacs-cpu', 'qsim', 'aer', 'pennylane', 'pennylane-lightning-qubit', 'cirq'} 
 
 
 class BenchCircuitRunner:
@@ -60,6 +61,8 @@ class BenchCircuitRunner:
         self.nwarmups = kwargs.pop("nwarmups")
         self.nrepeats = kwargs.pop("nrepeats")
         self.new_circ = kwargs.pop("new")
+
+        self.cpu_only = self.backend in CPU_BACKENDS
 
         # Parse pauli string options
         try:
@@ -109,8 +112,12 @@ class BenchCircuitRunner:
 
     def run(self):
         if self._nqubits is None:
-            gpu_prop = cp.cuda.runtime.getDeviceProperties(cp.cuda.Device().id)
-            max_n_qubits = math.floor(math.log2(gpu_prop['totalGlobalMem'] / (8 if self.precision == 'single' else 16)))
+            if self.cpu_only:
+                max_n_qubits = 30
+            else:
+                gpu_prop = cp.cuda.runtime.getDeviceProperties(cp.cuda.Device().id)
+                max_n_qubits = math.floor(math.log2(gpu_prop['totalGlobalMem'] / (8 if self.precision == 'single' else 16)))
+            
             nqubits_list = list(range(4, max_n_qubits + 4, 4))
         else:
             nqubits_list = [self._nqubits]
@@ -179,7 +186,8 @@ class BenchCircuitRunner:
 
         # NOTE: CUDA-Q feature missing, see: https://github.com/NVIDIA/cuda-quantum/issues/2156
         # Hence, generate circuit on each rank. We expect same circuit since it is deterministic.
-        if self.frontend == 'cudaq':
+        # cudaq and pennylane circuits are not picklable that causes problem with MPI run
+        if self.frontend == 'cudaq' or self.frontend == 'pennylane': 
             return functools.partial(self._load_or_generate_circuit, circuit_filename)()
 
         MPI = is_running_mpi()
@@ -286,10 +294,10 @@ class BenchCircuitRunner:
         filepath = f'{self.cache_dir}/data/{data_filename}'
         self.full_data = load_benchmark_data(filepath)
 
-        gpu_device_properties = cp.cuda.runtime.getDeviceProperties(cp.cuda.Device().id)
-        gpu_name = gpu_device_properties['name'].decode('utf-8').split(' ')[-1]
-        num_qubits = str(self.nqubits)
-        num_gpus = str(self.ngpus)
+        if self.cpu_only:
+            gpu_device_properties = None
+        else:
+            gpu_device_properties = cp.cuda.runtime.getDeviceProperties(cp.cuda.Device().id)
 
         circuit_filename = f'circuits/{self.benchmark_name}_{self.nqubits}'
         if 'unfold' in self.benchmark_config.keys() and self.benchmark_config['unfold']:
@@ -356,7 +364,7 @@ class BenchCircuitRunner:
         perf_time, cuda_time, post_time, post_process = self.timer(backend, circuit, self.nshots) # nsamples -> nshots
 
         # report the result
-        run_env = gen_run_env(gpu_device_properties)
+        run_env = gen_run_env(gpu_device_properties, self.cpu_only)
         report(perf_time, cuda_time, post_time if post_process else None, self.ngpus,
                run_env, gpu_device_properties, self.benchmark_data)
 
@@ -483,7 +491,7 @@ class BenchApiRunner:
         perf_time, cuda_time = bench_func(benchmark_data)  # update benchmark_data in-place
 
         # report the result
-        run_env = gen_run_env(gpu_device_properties)
+        run_env = gen_run_env(gpu_device_properties, False)
         report(perf_time, cuda_time, None, 1,
                run_env, gpu_device_properties, benchmark_data)
 
@@ -663,9 +671,9 @@ class BenchApiRunner:
         benchmark = self.benchmark
 
         if benchmark in self.supported_cusv_apis:
-            from cuquantum import custatevec as lib
+            from cuquantum.bindings import custatevec as lib
         elif benchmark in self.supported_cutn_apis:
-            from cuquantum import cutensornet as lib
+            from cuquantum.bindings import cutensornet as lib
         else:
             assert False
 
