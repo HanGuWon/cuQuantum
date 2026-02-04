@@ -22,6 +22,16 @@ pip install --no-deps .
 ```
 and `pip` would not install any extra package for you.
 
+### Minimal install in the CUDA-Quantum container
+
+Example of a minimal installation inside the nvcr.io/nvidia/quantum/cuda-quantum:cu13-0.13.0 CUDA‑Quantum container:
+
+```
+# Container tag determines CUDA runtime version
+CUDA_RUNTIME=cu13
+pip install . cloudpickle cuquantum-python-${CUDA_RUNTIME}==25.9.1
+```
+
 ## Running
 
 After installation, a new command `nv-quantum-benchmarks` is installed to your Python environment. You can see the help message via `nv-quantum-benchmarks --help`:

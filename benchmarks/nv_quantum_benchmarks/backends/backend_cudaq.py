@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES
+# Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
@@ -8,6 +8,8 @@ import warnings
 import os
 import numpy as np
 try:
+    # workaround for fuse not being set in fp32 mode
+    os.environ["CUDAQ_DEFAULT_SIMULATOR"] = "qpp-cpu"
     import cudaq
 except ImportError:
     cudaq = None
@@ -53,8 +55,9 @@ class Cudaq(Backend):
         if identifier.endswith("cusv"):
             if ngpus != 1:
                 raise ValueError("the cusv backend requires 1 GPU per process (--ngpus 1)")
-            nfused = kwargs.pop('nfused')
-            os.environ['CUDAQ_FUSION_MAX_QUBITS'] = str(nfused)
+            nfused = kwargs.pop('nfused', None)
+            if nfused is not None:
+                os.environ['CUDAQ_FUSION_MAX_QUBITS'] = str(nfused)
             os.environ['CUDAQ_FUSION_NUM_HOST_THREADS'] = str(ncpu_threads)
             if self.precision == 'single':
                 cudaq.set_target('nvidia', option='fp32')
